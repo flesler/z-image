@@ -96,6 +96,40 @@ def filter_names(filters: list[str]) -> set[str]:
     return names
 
 
+def expand_lora_specs(specs: list[str], catalog: dict | None = None) -> list[str]:
+    """Expand '*' / 'all' to every catalog LoRA with a file on disk."""
+    catalog = catalog if catalog is not None else load_catalog()
+    wildcard = {"*", "all"}
+    named = [s for s in specs if s.split(":", 1)[0].strip().lower() not in wildcard]
+    if len(named) == len(specs):
+        return specs
+
+    expanded: list[str] = []
+    seen: set[str] = set()
+
+    def add(spec: str) -> None:
+        key = normalize_filename(spec.split(":", 1)[0])
+        if key in seen:
+            return
+        seen.add(key)
+        expanded.append(spec)
+
+    for file in sorted(catalog.keys()):
+        norm = normalize_filename(file)
+        try:
+            resolve_path(norm)
+        except FileNotFoundError:
+            continue
+        add(norm.removesuffix(".safetensors"))
+
+    for spec in named:
+        add(spec)
+
+    if not expanded:
+        raise SystemExit("no LoRAs found for '*' (check lib/loras.json and data/loras/)")
+    return expanded
+
+
 def benchmark_plan(
     catalog: dict,
     seed_base: int,

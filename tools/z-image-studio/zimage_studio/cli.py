@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     compare = sub.add_parser("compare", help="A/B compare base vs LoRA(s)")
     compare.add_argument("--prompt", action="append", default=None, metavar="TEXT", help="repeatable; seeds use --seed, --seed+1, ...")
     compare.add_argument("--prompt-file", action="append", default=[], type=Path, metavar="FILE", help="one prompt per line; skips empty and duplicates")
-    compare.add_argument("--lora", action="append", required=True, metavar="NAME[:STRENGTH]")
+    compare.add_argument("--lora", action="append", required=True, metavar="NAME[:STRENGTH]|*", help="repeatable; use '*' for all catalog LoRAs")
     compare.add_argument("--seed", type=int)
     compare.add_argument("--repeat", type=int, default=1)
     compare.add_argument("--width", "-w", type=int, default=1024)

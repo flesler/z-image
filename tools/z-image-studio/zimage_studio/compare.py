@@ -7,7 +7,7 @@ from zimage.engine import load_pipeline
 
 from .config import apply_env, compare_dir
 from .generate import run_generate
-from .loras import LoraSpec, apply_triggers, normalize_prompt, random_seed, resolve_spec
+from .loras import LoraSpec, apply_triggers, expand_lora_specs, normalize_prompt, random_seed, resolve_spec
 from .naming import compare_filename, compare_stem
 from .pipeline_jobs import run_batch_on_pipe
 from .text_encoder import release_text_encoder
@@ -62,6 +62,11 @@ def run_compare(
         raise SystemExit("need at least one --lora name[:strength]")
     if repeat < 1:
         raise SystemExit("--repeat must be >= 1")
+
+    wildcard = any(s.split(":", 1)[0].strip().lower() in ("*", "all") for s in loras)
+    loras = expand_lora_specs(loras)
+    if wildcard:
+        print(f"loras: expanded '*' → {len(loras)} adapter(s)", file=sys.stderr)
 
     resolved = [resolve_spec(spec) for spec in loras]
     if not each and not combo:
