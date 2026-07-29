@@ -9,7 +9,7 @@ import torch
 import zimage.engine as engine
 from diffusers.pipelines.z_image.pipeline_z_image import ZImagePipeline
 
-from .config import cpu_offload_enabled, gpu_monitor_enabled
+from .config import cpu_offload_enabled, gpu_monitor_enabled, verbose_enabled
 from .text_encoder import ensure_text_encoder, release_text_encoder
 
 _installed = False
@@ -74,7 +74,8 @@ def install(*, log: Callable[[str], None] | None = None) -> None:
             print(msg, flush=True)
 
     if cpu_offload_enabled():
-        emit("[gpu] accelerate CPU offload (ZIMAGE_CPU_OFFLOAD=1)")
+        if verbose_enabled():
+            emit("[gpu] accelerate CPU offload (ZIMAGE_CPU_OFFLOAD=1)")
         _installed = True
         return
 
@@ -105,6 +106,7 @@ def install(*, log: Callable[[str], None] | None = None) -> None:
 
     engine.load_pipeline = load_pipeline_fast_gpu
     _patch_pipeline()
-    tiling = ", VAE tiling on" if vae_tiling_enabled() else ""
-    emit(f"[gpu] fast path — no attention slicing, no progress bar, TE released after encode{tiling}")
+    if verbose_enabled():
+        tiling = ", VAE tiling on" if vae_tiling_enabled() else ""
+        emit(f"[gpu] fast path — no attention slicing, no progress bar, TE released after encode{tiling}")
     _installed = True

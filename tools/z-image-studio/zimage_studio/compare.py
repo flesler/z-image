@@ -36,31 +36,35 @@ def collect_prompts(*, inline: list[str] | None, files: list[Path]) -> list[str]
     return prompts
 
 
-def parse_steps_list(raw: str) -> list[int]:
-    """Parse --steps '7,8,9,10' — skip empty, dedupe, preserve order."""
-    values: list[int] = []
-    seen: set[int] = set()
-    for part in raw.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        steps = int(part)
-        if steps < 1:
-            raise SystemExit("--steps values must be >= 1")
-        if steps in seen:
-            continue
-        seen.add(steps)
-        values.append(steps)
+def dedupe_ints(values: list[int] | None) -> list[int]:
+    """Dedupe int list, preserve order."""
     if not values:
-        raise SystemExit("need at least one --steps value")
-    return values
+        return []
+    seen: set[int] = set()
+    out: list[int] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        out.append(value)
+    return out
+
+
+def normalize_steps_list(values: list[int] | None) -> list[int]:
+    steps = dedupe_ints(values)
+    if not steps:
+        return [DEFAULT_COMPARE_STEPS]
+    for step in steps:
+        if step < 1:
+            raise SystemExit("--steps values must be >= 1")
+    return steps
 
 
 def run_compare(
     prompts: list[str],
     *,
     loras: list[str],
-    seed: int | None = None,
+    seeds: list[int] | None = None,
     seed_set: bool = False,
     repeat: int = 1,
     width: int = 1024,
@@ -69,15 +73,17 @@ def run_compare(
     precision: str = "q4",
     each: bool = False,
     combo: bool = False,
+    include_base: bool = True,
     cold: bool = False,
     override: bool = False,
+    dry_run: bool = False,
 ) -> list[Path]:
     apply_env()
     prompts = [normalize_prompt(p) for p in prompts]
     if not prompts:
         raise SystemExit("need at least one --prompt")
-    if not loras:
-        raise SystemExit("need at least one --lora name[:strength]")
+    if not loras and not include_base:
+        raise SystemExit("need --lora or drop --no-base")
     if repeat < 1:
         raise SystemExit("--repeat must be >= 1")
 
@@ -85,8 +91,8 @@ def run_compare(
     if len(steps_list) > 1 or steps_list[0] != DEFAULT_COMPARE_STEPS:
         print(f"steps: {', '.join(str(s) for s in steps_list)}", file=sys.stderr)
 
-    wildcard = any(s.split(":", 1)[0].strip().lower() in ("*", "all") for s in loras)
-    loras = expand_lora_specs(loras)
+    wildcard = loras and any(s.split(":", 1)[0].strip().lower() in ("*", "all") for s in loras)
+    loras = expand_lora_specs(loras) if loras else []
     if wildcard:
         print(f"loras: expanded '*' → {len(loras)} adapter(s)", file=sys.stderr)
 
@@ -98,8 +104,14 @@ def run_compare(
     root = compare_dir()
     root.mkdir(parents=True, exist_ok=True)
 
-    if not cold:
+    if not cold and not dry_run:
         ensure_worker(cold=False)
+
+    seed_runs = seeds if seed_set else [None]
+    if seed_set and not seeds:
+        raise SystemExit("need at least one --seed value")
+    if seed_set and len(seeds) > 1:
+        print(f"seeds: {', '.join(str(s) for s in seeds)}", file=sys.stderr)
 
     outputs: list[Path] = []
 
@@ -110,8 +122,7 @@ def run_compare(
             _run_one_compare(
                 prompts=prompts,
                 resolved=resolved,
-                rep=rep,
-                seed=seed,
+                seed_runs=seed_runs,
                 seed_set=seed_set,
                 root=root,
                 width=width,
@@ -120,21 +131,18 @@ def run_compare(
                 precision=precision,
                 each=each,
                 combo=combo,
+                include_base=include_base,
                 cold=cold,
                 override=override,
+                dry_run=dry_run,
             )
         )
 
-    print(f"compare root: {root}", file=sys.stderr)
-    for path in outputs:
-        print(path)
     return outputs
 
 
-def _prompt_seed(*, seed: int | None, seed_set: bool, rep: int, prompt_idx: int, n_prompts: int) -> int:
-    if seed_set:
-        return (seed or 0) + rep * n_prompts + prompt_idx
-    return random_seed()
+def _log_generated(path: str | Path, elapsed_s: float) -> None:
+    print(f"{path} {elapsed_s:.1f}s", file=sys.stderr, flush=True)
 
 
 def _model_variants(
@@ -142,8 +150,11 @@ def _model_variants(
     *,
     each: bool,
     combo: bool,
+    include_base: bool = True,
 ) -> list[tuple[str, list[LoraSpec], str]]:
-    models: list[tuple[str, list[LoraSpec], str]] = [("base", [], "base")]
+    models: list[tuple[str, list[LoraSpec], str]] = []
+    if include_base:
+        models.append(("base", [], "base"))
     if each:
         for spec in resolved:
             models.append((f"lora {spec}", [spec], spec.name))
@@ -160,8 +171,7 @@ def _run_one_compare(
     *,
     prompts: list[str],
     resolved: list[LoraSpec],
-    rep: int,
-    seed: int | None,
+    seed_runs: list[int | None],
     seed_set: bool,
     root: Path,
     width: int,
@@ -170,50 +180,54 @@ def _run_one_compare(
     precision: str,
     each: bool,
     combo: bool,
+    include_base: bool,
     cold: bool,
     override: bool,
+    dry_run: bool,
 ) -> list[Path]:
     outputs: list[Path] = []
     jobs: list[dict] = []
-    models = _model_variants(resolved, each=each, combo=combo)
+    models = _model_variants(resolved, each=each, combo=combo, include_base=include_base)
+    if not models:
+        raise SystemExit("no model variants to run (use --lora and/or drop --no-base)")
 
-    for model_label, lora_specs, variant in models:
-        for step_count in steps_list:
-            for prompt_idx, prompt in enumerate(prompts):
-                iter_seed = _prompt_seed(
-                    seed=seed,
-                    seed_set=seed_set,
-                    rep=rep,
-                    prompt_idx=prompt_idx,
-                    n_prompts=len(prompts),
-                )
-                if prompt_idx == 0 and model_label == "base" and step_count == steps_list[0]:
-                    print(f"seed: {iter_seed}" + (f" (+1 per prompt)" if len(prompts) > 1 and seed_set else ""), file=sys.stderr)
-                final_prompt = apply_triggers(prompt, [str(spec) for spec in lora_specs])
-                stem = compare_stem(prompt, width, height, iter_seed, step_count)
-                output = root / compare_filename(stem, variant)
+    for seed_idx, run_seed in enumerate(seed_runs):
+        iter_seed = run_seed if seed_set else random_seed()
+        if seed_set and len(seed_runs) > 1:
+            print(f"seed run: {iter_seed}", file=sys.stderr)
+        elif seed_idx == 0:
+            suffix = " (random)" if not seed_set else ""
+            print(f"seed: {iter_seed}{suffix}", file=sys.stderr)
 
-                step_label = f" s{step_count}" if len(steps_list) > 1 else ""
-                if not override and output.is_file():
-                    print(f"⊘ skip {model_label}{step_label} (exists) → {output}", file=sys.stderr)
+        for model_label, lora_specs, variant in models:
+            for step_count in steps_list:
+                for prompt in prompts:
+                    final_prompt = apply_triggers(prompt, [str(spec) for spec in lora_specs])
+                    stem = compare_stem(prompt, width, height, iter_seed, step_count)
+                    output = root / compare_filename(stem, variant)
+
+                    step_label = f" s{step_count}" if len(steps_list) > 1 else ""
+                    if not override and output.is_file():
+                        print(f"⊘ skip {model_label}{step_label} → {output}", file=sys.stderr)
+                        outputs.append(output)
+                        continue
+
+                    if dry_run:
+                        print(f"→ {model_label}{step_label} → {output}", file=sys.stderr)
+                        if final_prompt != prompt:
+                            print(f"prompt: {final_prompt}", file=sys.stderr)
+                    jobs.append(
+                        {
+                            "prompt": final_prompt,
+                            "output": str(output),
+                            "seed": iter_seed,
+                            "steps": step_count,
+                            "loras": [{"file": spec.file, "strength": spec.strength} for spec in lora_specs],
+                        }
+                    )
                     outputs.append(output)
-                    continue
 
-                print(f"→ {model_label}{step_label} → {output}", file=sys.stderr)
-                if final_prompt != prompt:
-                    print(f"prompt: {final_prompt}", file=sys.stderr)
-                jobs.append(
-                    {
-                        "prompt": final_prompt,
-                        "output": str(output),
-                        "seed": iter_seed,
-                        "steps": step_count,
-                        "loras": [{"file": spec.file, "strength": spec.strength} for spec in lora_specs],
-                    }
-                )
-                outputs.append(output)
-
-    if not jobs:
+    if not jobs or dry_run:
         return outputs
 
     if cold:
@@ -234,6 +248,7 @@ def _run_one_compare(
                 width=width,
                 height=height,
                 default_steps=DEFAULT_COMPARE_STEPS,
+                on_image=lambda r: _log_generated(r["output"], r["elapsed_s"]),
             )
         finally:
             release_text_encoder(pipe)
@@ -244,6 +259,7 @@ def _run_one_compare(
             height=height,
             steps=DEFAULT_COMPARE_STEPS,
             precision=precision,
+            on_image=lambda r: _log_generated(r["output"], r["elapsed_s"]),
         )
 
     return outputs

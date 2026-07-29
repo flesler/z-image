@@ -85,6 +85,7 @@ def generate_batch_via_worker(
     height: int,
     steps: int,
     precision: str,
+    on_image=None,
 ) -> dict:
     payload = {
         "jobs": jobs,
@@ -92,6 +93,7 @@ def generate_batch_via_worker(
         "height": height,
         "steps": steps,
         "precision": precision,
+        "stream": True,
     }
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
@@ -103,7 +105,21 @@ def generate_batch_via_worker(
     with urllib.request.urlopen(req, timeout=3600) as resp:
         if resp.status != 200:
             raise RuntimeError(f"worker returned {resp.status}")
-        return json.loads(resp.read().decode())
+        summary: dict = {}
+        for raw in resp:
+            line = raw.decode().strip()
+            if not line:
+                continue
+            event = json.loads(line)
+            kind = event.get("type")
+            if kind == "image":
+                if on_image:
+                    on_image(event)
+            elif kind == "done":
+                summary = event
+            elif kind == "error":
+                raise RuntimeError(event.get("error", "worker batch failed"))
+        return summary
 
 
 def generate_cold(

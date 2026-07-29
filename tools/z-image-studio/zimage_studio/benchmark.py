@@ -29,7 +29,7 @@ def run_benchmark(
         run_compare(
             [prompt],
             loras=[lora_file],
-            seed=seed,
+            seeds=[seed],
             seed_set=True,
             repeat=repeat,
             combo=True,

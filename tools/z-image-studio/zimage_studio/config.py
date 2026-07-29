@@ -31,6 +31,10 @@ def load_pipeline(*args, **kwargs):
     return zengine.load_pipeline(*args, **kwargs)
 
 
+def verbose_enabled() -> bool:
+    return os.environ.get("ZIMAGE_VERBOSE", "0").lower() in ("1", "true", "yes")
+
+
 def apply_env() -> None:
     root = str(ROOT)
     existing = os.environ.get("PYTHONPATH", "")

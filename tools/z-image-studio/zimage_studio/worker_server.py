@@ -91,7 +91,7 @@ def run_generate_job(body: dict) -> dict:
     }
 
 
-def run_generate_batch(body: dict) -> dict:
+def run_generate_batch(body: dict, *, on_image=None) -> dict:
     jobs = body["jobs"]
     if not jobs:
         raise ValueError("jobs must not be empty")
@@ -122,6 +122,7 @@ def run_generate_batch(body: dict) -> dict:
             default_steps=steps,
             log=log,
             reloaded=reloaded,
+            on_image=on_image,
         )
         release_text_encoder(pipe)
     finally:
@@ -175,7 +176,10 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(200, run_generate_job(body))
                     return
                 if self.path == "/generate_batch":
-                    self._json(200, run_generate_batch(body))
+                    if body.get("stream"):
+                        self._stream_batch(body)
+                    else:
+                        self._json(200, run_generate_batch(body))
                     return
         except Exception as e:
             log(f"error: {e}")
@@ -183,6 +187,25 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         self._json(404, {"error": "not found"})
+
+    def _stream_batch(self, body: dict) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson")
+        self.end_headers()
+
+        def write_event(obj: dict) -> None:
+            self.wfile.write((json.dumps(obj) + "\n").encode())
+            self.wfile.flush()
+
+        try:
+            def on_image(result: dict) -> None:
+                write_event({"type": "image", **result})
+
+            summary = run_generate_batch(body, on_image=on_image)
+            write_event({"type": "done", **summary})
+        except Exception as e:
+            log(f"error: {e}")
+            write_event({"type": "error", "error": str(e)})
 
     def _json(self, code: int, obj: dict) -> None:
         data = json.dumps(obj).encode()

@@ -136,6 +136,7 @@ def run_batch_on_pipe(
     default_steps: int = 9,
     log: Callable[[str], None] | None = None,
     reloaded: bool = False,
+    on_image: Callable[[dict], None] | None = None,
 ) -> tuple[list[dict], float, float]:
     """Run jobs grouped by model, then steps, then prompts."""
     if not jobs:
@@ -201,14 +202,15 @@ def run_batch_on_pipe(
                     image.save(output)
                     img_s = time.perf_counter() - t_img
                     emit(f"image {img_n}/{len(jobs)}: {img_s:.1f}s {label}{step_tag} → {output.name}")
-                    results.append(
-                        {
+                    result = {
                             "output": str(output),
                             "loras": len(loras or []),
                             "steps": step_count,
                             "elapsed_s": round(img_s, 2),
                         }
-                    )
+                    results.append(result)
+                    if on_image:
+                        on_image(result)
         finally:
             _unload_loras(pipe, loras)
             if torch.cuda.is_available():
