@@ -3,12 +3,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from zimage.engine import load_pipeline
-
-from .config import apply_env, compare_dir
+from .config import apply_env, compare_dir, load_pipeline
 from .generate import run_generate
 from .loras import LoraSpec, apply_triggers, expand_lora_specs, normalize_prompt, random_seed, resolve_spec
-from .naming import compare_filename, compare_stem
+from .naming import DEFAULT_COMPARE_STEPS, compare_filename, compare_stem
 from .pipeline_jobs import run_batch_on_pipe
 from .text_encoder import release_text_encoder
 from .worker_client import ensure_worker, generate_batch_via_worker
@@ -38,6 +36,26 @@ def collect_prompts(*, inline: list[str] | None, files: list[Path]) -> list[str]
     return prompts
 
 
+def parse_steps_list(raw: str) -> list[int]:
+    """Parse --steps '7,8,9,10' — skip empty, dedupe, preserve order."""
+    values: list[int] = []
+    seen: set[int] = set()
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        steps = int(part)
+        if steps < 1:
+            raise SystemExit("--steps values must be >= 1")
+        if steps in seen:
+            continue
+        seen.add(steps)
+        values.append(steps)
+    if not values:
+        raise SystemExit("need at least one --steps value")
+    return values
+
+
 def run_compare(
     prompts: list[str],
     *,
@@ -47,7 +65,7 @@ def run_compare(
     repeat: int = 1,
     width: int = 1024,
     height: int = 1024,
-    steps: int = 9,
+    steps_list: list[int] | None = None,
     precision: str = "q4",
     each: bool = False,
     combo: bool = False,
@@ -62,6 +80,10 @@ def run_compare(
         raise SystemExit("need at least one --lora name[:strength]")
     if repeat < 1:
         raise SystemExit("--repeat must be >= 1")
+
+    steps_list = steps_list or [DEFAULT_COMPARE_STEPS]
+    if len(steps_list) > 1 or steps_list[0] != DEFAULT_COMPARE_STEPS:
+        print(f"steps: {', '.join(str(s) for s in steps_list)}", file=sys.stderr)
 
     wildcard = any(s.split(":", 1)[0].strip().lower() in ("*", "all") for s in loras)
     loras = expand_lora_specs(loras)
@@ -94,7 +116,7 @@ def run_compare(
                 root=root,
                 width=width,
                 height=height,
-                steps=steps,
+                steps_list=steps_list,
                 precision=precision,
                 each=each,
                 combo=combo,
@@ -144,7 +166,7 @@ def _run_one_compare(
     root: Path,
     width: int,
     height: int,
-    steps: int,
+    steps_list: list[int],
     precision: str,
     each: bool,
     combo: bool,
@@ -156,37 +178,40 @@ def _run_one_compare(
     models = _model_variants(resolved, each=each, combo=combo)
 
     for model_label, lora_specs, variant in models:
-        for prompt_idx, prompt in enumerate(prompts):
-            iter_seed = _prompt_seed(
-                seed=seed,
-                seed_set=seed_set,
-                rep=rep,
-                prompt_idx=prompt_idx,
-                n_prompts=len(prompts),
-            )
-            if prompt_idx == 0 and model_label == "base":
-                print(f"seed: {iter_seed}" + (f" (+1 per prompt)" if len(prompts) > 1 and seed_set else ""), file=sys.stderr)
-            final_prompt = apply_triggers(prompt, [str(spec) for spec in lora_specs])
-            stem = compare_stem(prompt, width, height, iter_seed)
-            output = root / compare_filename(stem, variant)
+        for step_count in steps_list:
+            for prompt_idx, prompt in enumerate(prompts):
+                iter_seed = _prompt_seed(
+                    seed=seed,
+                    seed_set=seed_set,
+                    rep=rep,
+                    prompt_idx=prompt_idx,
+                    n_prompts=len(prompts),
+                )
+                if prompt_idx == 0 and model_label == "base" and step_count == steps_list[0]:
+                    print(f"seed: {iter_seed}" + (f" (+1 per prompt)" if len(prompts) > 1 and seed_set else ""), file=sys.stderr)
+                final_prompt = apply_triggers(prompt, [str(spec) for spec in lora_specs])
+                stem = compare_stem(prompt, width, height, iter_seed, step_count)
+                output = root / compare_filename(stem, variant)
 
-            if not override and output.is_file():
-                print(f"⊘ skip {model_label} (exists) → {output}", file=sys.stderr)
+                step_label = f" s{step_count}" if len(steps_list) > 1 else ""
+                if not override and output.is_file():
+                    print(f"⊘ skip {model_label}{step_label} (exists) → {output}", file=sys.stderr)
+                    outputs.append(output)
+                    continue
+
+                print(f"→ {model_label}{step_label} → {output}", file=sys.stderr)
+                if final_prompt != prompt:
+                    print(f"prompt: {final_prompt}", file=sys.stderr)
+                jobs.append(
+                    {
+                        "prompt": final_prompt,
+                        "output": str(output),
+                        "seed": iter_seed,
+                        "steps": step_count,
+                        "loras": [{"file": spec.file, "strength": spec.strength} for spec in lora_specs],
+                    }
+                )
                 outputs.append(output)
-                continue
-
-            print(f"→ {model_label} → {output}", file=sys.stderr)
-            if final_prompt != prompt:
-                print(f"prompt: {final_prompt}", file=sys.stderr)
-            jobs.append(
-                {
-                    "prompt": final_prompt,
-                    "output": str(output),
-                    "seed": iter_seed,
-                    "loras": [{"file": spec.file, "strength": spec.strength} for spec in lora_specs],
-                }
-            )
-            outputs.append(output)
 
     if not jobs:
         return outputs
@@ -206,9 +231,9 @@ def _run_one_compare(
             run_batch_on_pipe(
                 pipe,
                 resolved_jobs,
-                steps=steps,
                 width=width,
                 height=height,
+                default_steps=DEFAULT_COMPARE_STEPS,
             )
         finally:
             release_text_encoder(pipe)
@@ -217,7 +242,7 @@ def _run_one_compare(
             jobs=jobs,
             width=width,
             height=height,
-            steps=steps,
+            steps=DEFAULT_COMPARE_STEPS,
             precision=precision,
         )
 

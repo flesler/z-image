@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 from .benchmark import run_benchmark
 from .cache_cmd import run_cache
-from .compare import collect_prompts, run_compare
+from .compare import collect_prompts, parse_steps_list, run_compare
 from .config import apply_env
 from .daemon import main as daemon_main
 from .generate import run_generate
@@ -39,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--repeat", type=int, default=1)
     compare.add_argument("--width", "-w", type=int, default=1024)
     compare.add_argument("--height", "-H", type=int, default=1024)
-    compare.add_argument("--steps", type=int, default=9)
+    compare.add_argument("--steps", default="9", metavar="N[,N...]", help="inference steps, or comma-separated (e.g. 7,8,9,10)")
     compare.add_argument("--precision", default="q4")
     compare.add_argument("--each", action="store_true")
     compare.add_argument("--combo", action="store_true")
@@ -90,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
             repeat=args.repeat,
             width=args.width,
             height=args.height,
-            steps=args.steps,
+            steps_list=parse_steps_list(args.steps),
             precision=args.precision,
             each=args.each,
             combo=args.combo,
@@ -119,7 +118,3 @@ def main(argv: list[str] | None = None) -> int:
         return run_cache(argv)
 
     return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

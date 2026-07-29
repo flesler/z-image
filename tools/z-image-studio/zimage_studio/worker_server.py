@@ -10,10 +10,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import zimage.engine as zengine
-from zimage.engine import load_pipeline
 from zimage.paths import get_loras_dir
 
-from .config import apply_env, default_precision, idle_unload_minutes, worker_host, worker_port
+from .config import apply_env, default_precision, idle_unload_minutes, load_pipeline, worker_host, worker_port
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
 from .job_monitor import JobMonitor, log_summary
 from .loras import resolve_path
@@ -118,9 +117,9 @@ def run_generate_batch(body: dict) -> dict:
         results, encode_s, denoise_s = run_batch_on_pipe(
             pipe,
             resolved_jobs,
-            steps=steps,
             width=width,
             height=height,
+            default_steps=steps,
             log=log,
             reloaded=reloaded,
         )

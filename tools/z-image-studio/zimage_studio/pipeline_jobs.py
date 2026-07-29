@@ -10,9 +10,9 @@ from typing import Callable
 
 import torch
 from safetensors.torch import load_file
-from zimage.engine import load_pipeline
 
-from .text_encoder import encode_prompts, release_text_encoder
+from .config import load_pipeline
+from .text_encoder import encode_prompts, pipe_device, release_text_encoder
 
 
 def _load_loras(pipe, loras: list[tuple[str, float]] | None) -> None:
@@ -68,7 +68,7 @@ def _denoise_on_pipe(
     if (prompt is None) == (prompt_embeds is None):
         raise ValueError("provide exactly one of prompt or prompt_embeds")
 
-    generator = torch.Generator(device=pipe.device).manual_seed(seed)
+    generator = torch.Generator(device=pipe_device(pipe)).manual_seed(seed)
     gen_kwargs = {
         "num_inference_steps": steps,
         "height": height,
@@ -116,7 +116,9 @@ def run_on_pipe(
 
 def prepare_loaded_pipe(pipe, *, reloaded: bool = False) -> None:
     """Re-apply fast-path settings; full .to(cuda) only needed after idle reload."""
-    if reloaded and torch.cuda.is_available():
+    from .config import cpu_offload_enabled
+
+    if reloaded and torch.cuda.is_available() and not cpu_offload_enabled():
         pipe.to("cuda")
     if hasattr(pipe, "set_progress_bar_config"):
         pipe.set_progress_bar_config(disable=True)
@@ -129,31 +131,36 @@ def run_batch_on_pipe(
     pipe,
     jobs: list[dict],
     *,
-    steps: int,
     width: int,
     height: int,
+    default_steps: int = 9,
     log: Callable[[str], None] | None = None,
     reloaded: bool = False,
 ) -> tuple[list[dict], float, float]:
-    """Run jobs grouped by LoRA config: encode all prompts per model, then denoise."""
+    """Run jobs grouped by model, then steps, then prompts."""
     if not jobs:
         return [], 0.0, 0.0
 
     prepare_loaded_pipe(pipe, reloaded=reloaded)
     if torch.cuda.is_available():
-        dev = next(pipe.transformer.parameters()).device
+        dev = pipe_device(pipe)
         if dev.type == "cuda":
             torch.cuda.set_device(dev)
 
+    def job_steps(job: dict) -> int:
+        return int(job.get("steps", default_steps))
+
     emit = log or (lambda msg: print(msg, file=sys.stderr, flush=True))
-    groups: OrderedDict[tuple[tuple[str, float], ...], list[dict]] = OrderedDict()
+    model_groups: OrderedDict[tuple[tuple[str, float], ...], list[dict]] = OrderedDict()
     for job in jobs:
         key = _lora_key(job.get("loras") or None)
-        groups.setdefault(key, []).append(job)
+        model_groups.setdefault(key, []).append(job)
 
+    step_values = sorted({job_steps(job) for job in jobs})
     emit(
-        f"batch: {len(jobs)} image(s) across {len(groups)} model(s), "
+        f"batch: {len(jobs)} image(s) across {len(model_groups)} model(s), "
         f"{len({job['prompt'] for job in jobs})} unique prompt(s)"
+        + (f", steps {','.join(str(s) for s in step_values)}" if len(step_values) > 1 else "")
     )
 
     all_prompts = list(dict.fromkeys(job["prompt"] for job in jobs))
@@ -167,35 +174,41 @@ def run_batch_on_pipe(
     results: list[dict] = []
     img_n = 0
 
-    for loras_key, group_jobs in groups.items():
+    for loras_key, model_jobs in model_groups.items():
         loras = list(loras_key) if loras_key else None
         label = "base" if not loras else f"lora×{len(loras)}"
-        emit(f"model {label}: {len(group_jobs)} image(s)")
+        steps_groups: OrderedDict[int, list[dict]] = OrderedDict()
+        for job in model_jobs:
+            steps_groups.setdefault(job_steps(job), []).append(job)
+        emit(f"model {label}: {len(model_jobs)} image(s)")
         _load_loras(pipe, loras)
         try:
-            for job in group_jobs:
-                img_n += 1
-                t_img = time.perf_counter()
-                image = _denoise_on_pipe(
-                    pipe,
-                    steps=steps,
-                    width=width,
-                    height=height,
-                    seed=int(job["seed"]),
-                    prompt_embeds=embeds_by_prompt[job["prompt"]],
-                )
-                output = Path(job["output"])
-                output.parent.mkdir(parents=True, exist_ok=True)
-                image.save(output)
-                img_s = time.perf_counter() - t_img
-                emit(f"image {img_n}/{len(jobs)}: {img_s:.1f}s {label} → {output.name}")
-                results.append(
-                    {
-                        "output": str(output),
-                        "loras": len(loras or []),
-                        "elapsed_s": round(img_s, 2),
-                    }
-                )
+            for step_count, step_jobs in steps_groups.items():
+                step_tag = f" s{step_count}" if len(steps_groups) > 1 else ""
+                for job in step_jobs:
+                    img_n += 1
+                    t_img = time.perf_counter()
+                    image = _denoise_on_pipe(
+                        pipe,
+                        steps=step_count,
+                        width=width,
+                        height=height,
+                        seed=int(job["seed"]),
+                        prompt_embeds=embeds_by_prompt[job["prompt"]],
+                    )
+                    output = Path(job["output"])
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    image.save(output)
+                    img_s = time.perf_counter() - t_img
+                    emit(f"image {img_n}/{len(jobs)}: {img_s:.1f}s {label}{step_tag} → {output.name}")
+                    results.append(
+                        {
+                            "output": str(output),
+                            "loras": len(loras or []),
+                            "steps": step_count,
+                            "elapsed_s": round(img_s, 2),
+                        }
+                    )
         finally:
             _unload_loras(pipe, loras)
             if torch.cuda.is_available():

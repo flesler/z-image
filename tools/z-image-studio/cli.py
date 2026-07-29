@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""z-image-studio entry point. Re-execs with local .venv when needed."""
+"""User-facing entry: venv re-exec + PYTHONPATH bootstrap. Commands live in zimage_studio.app."""
 from __future__ import annotations
 
 import os
@@ -34,6 +34,6 @@ def _bootstrap() -> None:
 if __name__ == "__main__":
     _ensure_venv()
     _bootstrap()
-    from zimage_studio.cli import main
+    from zimage_studio.app import main
 
     raise SystemExit(main())

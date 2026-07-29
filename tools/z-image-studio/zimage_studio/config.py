@@ -23,6 +23,14 @@ def ensure_gpu_pipeline_patch() -> None:
     _patch_installed = True
 
 
+def load_pipeline(*args, **kwargs):
+    """Always use the patched zimage.engine.load_pipeline (fast GPU path)."""
+    ensure_gpu_pipeline_patch()
+    import zimage.engine as zengine
+
+    return zengine.load_pipeline(*args, **kwargs)
+
+
 def apply_env() -> None:
     root = str(ROOT)
     existing = os.environ.get("PYTHONPATH", "")

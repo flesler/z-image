@@ -4,6 +4,8 @@ import re
 
 from .config import SLUG_MAX
 
+DEFAULT_COMPARE_STEPS = 9
+
 _slug_re = re.compile(r"[^a-z0-9]+")
 
 
@@ -13,17 +15,32 @@ def slugify(text: str, max_len: int = SLUG_MAX) -> str:
     return slug[:max_len]
 
 
-def compare_stem(prompt: str, width: int, height: int, seed: int) -> str:
-    return f"{slugify(prompt)}-{width}x{height}-s{seed}"
+def compare_stem(
+    prompt: str,
+    width: int,
+    height: int,
+    seed: int,
+    steps: int = DEFAULT_COMPARE_STEPS,
+) -> str:
+    base = f"{slugify(prompt)}-{width}x{height}-{seed}"
+    if steps != DEFAULT_COMPARE_STEPS:
+        base += f"-s{steps}"
+    return base
 
 
-def output_filename(prompt: str, width: int, height: int, seed: int) -> str:
-    return f"{compare_stem(prompt, width, height, seed)}.png"
+def output_filename(
+    prompt: str,
+    width: int,
+    height: int,
+    seed: int,
+    steps: int = DEFAULT_COMPARE_STEPS,
+) -> str:
+    return f"{compare_stem(prompt, width, height, seed, steps)}.png"
 
 
 def compare_list_glob(prompt: str, width: int, height: int) -> str:
     """Glob pattern to list all variants for a prompt/size (seed wildcard)."""
-    return f"{slugify(prompt)}-{width}x{height}-s*"
+    return f"{slugify(prompt)}-{width}x{height}-*"
 
 
 def compare_filename(stem: str, variant: str) -> str:

@@ -18,6 +18,10 @@ def _log(msg: str) -> None:
     print(f"[gpu] {msg}", file=sys.stderr, flush=True)
 
 
+def pipe_device(pipe: ZImagePipeline) -> torch.device:
+    return next(pipe.transformer.parameters()).device
+
+
 def release_text_encoder(pipe: ZImagePipeline) -> None:
     if cpu_offload_enabled() or pipe.text_encoder is None:
         return
@@ -60,7 +64,7 @@ def encode_prompts(pipe: ZImagePipeline, prompts: Iterable[str]) -> dict[str, li
         return {}
 
     precision = getattr(pipe, "_zimage_precision", "q4")
-    device = pipe.device
+    device = pipe_device(pipe)
     t0 = time.perf_counter()
     cached: dict[str, list[torch.Tensor]] = {}
     to_encode: list[str] = []
