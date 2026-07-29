@@ -8,12 +8,22 @@ _slug_re = re.compile(r"[^a-z0-9]+")
 
 
 def slugify(text: str, max_len: int = SLUG_MAX) -> str:
+    text = text.replace("\n", " ").replace("\r", " ")
     slug = _slug_re.sub("-", text.lower()).strip("-")
     return slug[:max_len]
 
 
 def compare_stem(prompt: str, width: int, height: int, seed: int) -> str:
-    return f"{slugify(prompt)}--{width}x{height}--s{seed}"
+    return f"{slugify(prompt)}-{width}x{height}-s{seed}"
+
+
+def output_filename(prompt: str, width: int, height: int, seed: int) -> str:
+    return f"{compare_stem(prompt, width, height, seed)}.png"
+
+
+def compare_list_glob(prompt: str, width: int, height: int) -> str:
+    """Glob pattern to list all variants for a prompt/size (seed wildcard)."""
+    return f"{slugify(prompt)}-{width}x{height}-s*"
 
 
 def compare_filename(stem: str, variant: str) -> str:

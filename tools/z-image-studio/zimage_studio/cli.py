@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 from .benchmark import run_benchmark
-from .compare import run_compare
+from .cache_cmd import run_cache
+from .compare import collect_prompts, run_compare
 from .config import apply_env
 from .daemon import main as daemon_main
 from .generate import run_generate
@@ -31,7 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_gen_flags(gen)
 
     compare = sub.add_parser("compare", help="A/B compare base vs LoRA(s)")
-    compare.add_argument("prompt")
+    compare.add_argument("--prompt", action="append", default=None, metavar="TEXT", help="repeatable; seeds use --seed, --seed+1, ...")
+    compare.add_argument("--prompt-file", action="append", default=[], type=Path, metavar="FILE", help="one prompt per line; skips empty and duplicates")
     compare.add_argument("--lora", action="append", required=True, metavar="NAME[:STRENGTH]")
     compare.add_argument("--seed", type=int)
     compare.add_argument("--repeat", type=int, default=1)
@@ -53,6 +55,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     daemon = sub.add_parser("daemon", help="warm worker daemon")
     daemon.add_argument("action", choices=["start", "stop", "status", "logs"])
+
+    cache = sub.add_parser("cache", help="prompt embed disk cache")
+    cache.add_argument("action", nargs="?", default="list", choices=["list", "prune", "rm"])
+    cache.add_argument("hash", nargs="?", help="hash prefix for rm")
 
     return parser
 
@@ -77,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "compare":
         run_compare(
-            args.prompt,
+            collect_prompts(inline=args.prompt, files=args.prompt_file),
             loras=args.lora,
             seed=args.seed,
             seed_set=args.seed is not None,
@@ -105,6 +111,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "daemon":
         return daemon_main([args.action])
+
+    if args.command == "cache":
+        argv = [args.action]
+        if args.hash:
+            argv.append(args.hash)
+        return run_cache(argv)
 
     return 1
 

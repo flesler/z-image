@@ -27,7 +27,7 @@ def run_benchmark(
     for lora_file, prompt, seed in plan:
         print(f"=== {lora_file} (s{seed}) ===", file=sys.stderr)
         run_compare(
-            prompt,
+            [prompt],
             loras=[lora_file],
             seed=seed,
             seed_set=True,

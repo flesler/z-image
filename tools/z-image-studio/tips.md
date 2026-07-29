@@ -46,9 +46,9 @@ Outputs land flat in `/tmp/z-image/compare/` — sort by filename to group varia
 
 ```
 /tmp/z-image/compare/
-  <prompt-slug>--1024x1024--s77-base.png
-  <prompt-slug>--1024x1024--s77-DarkGhibliZ.png
-  <prompt-slug>--1024x1024--s77-ZiTMythG0thicL1nes.png
+  <prompt-slug>-1024x1024-s77-base.png
+  <prompt-slug>-1024x1024-s77-DarkGhibliZ.png
+  <prompt-slug>-1024x1024-s77-ZiTMythG0thicL1nes.png
 ```
 
 Same stem, different suffix — scales to A/B/C/D without per-LoRA folders.
@@ -71,44 +71,3 @@ Trigger words for known LoRAs are prepended automatically from `lib/loras.json` 
 
 Single image with LoRA: `$ZIMG gen "prompt" --lora DarkGhibliZ`
 
-# LoRAs
-
-## DarkGhibliZ
-
-https://civitai.com/models/1349631/dark-ghibli-fairytales?modelVersionId=2500043
-
-Trigger (auto-prepended): `Studio Ghibli Dark Fairytale` — default strength 0.85 in `loras.json`.
-
-## Purple_grainy_zit
-
-https://civitai.com/models/2329053/purple-grainy-oror-photography-lora?modelVersionId=2619939
-
-Default strength 1.0 — grainy photography style (no trigger word).
-
-## ZiTMythG0thicL1nes
-
-https://civitai.com/models/599757/velvets-mythic-fantasy-styles-or-flux-pony-illustrious-zit-anima-krea2?modelVersionId=2924569
-
-Trigger (auto-prepended): `G0thicL1nes` — default strength 0.8, mythic fantasy line-art style.
-
-## ZiTMythR3alisticF
-
-https://civitai.com/models/599757/velvets-mythic-fantasy-styles-or-flux-pony-illustrious-zit-anima-krea2?modelVersionId=2547883
-
-Trigger (auto-prepended): `R3alisticF` — default strength 0.8, mythic fantasy painterly realism.
-
-## MidJourneyNSFWZ
-
-https://civitai.com/models/837884/midjourney-artful-nsfw?modelVersionId=2599899
-
-Trigger (auto-prepended): `ArtfulNSFW` — default strength 0.8, MidJourney-style art.
-
-## RealisticSnapshot
-
-Default strength 0.65 in `loras.json` (potent; override lower if needed).
-
-Trigger words (optional — push texture/lighting style):
-
-- Camera roll look: amateur digital snapshot, candid, smartphone capture, high ISO noise, direct on-camera flash
-- High-fidelity details: visible pores, visible vellus hair, subsurface scattering, detailed skin texture
-- Optical realism: wide-angle lens, barrel distortion, chromatic aberration, depth of field

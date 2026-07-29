@@ -10,6 +10,18 @@ LORAS_JSON = Path(os.environ.get("ZIMAGE_LORAS_MAP", LIB_DIR / "loras.json"))
 PIDFILE = ROOT / ".worker.pid"
 SLUG_MAX = 48
 
+_patch_installed = False
+
+
+def ensure_gpu_pipeline_patch() -> None:
+    global _patch_installed
+    if _patch_installed:
+        return
+    from .gpu_pipeline import install
+
+    install()
+    _patch_installed = True
+
 
 def apply_env() -> None:
     root = str(ROOT)
@@ -24,11 +36,13 @@ def apply_env() -> None:
     os.environ.setdefault("HF_HOME", str(hf_home))
     os.environ.setdefault("TRANSFORMERS_CACHE", str(hf_home / "hub"))
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    os.environ.setdefault("ZIMAGE_CPU_OFFLOAD", "0")
     if VENV_BIN.is_dir():
         path = os.environ.get("PATH", "")
         venv_path = str(VENV_BIN)
         if venv_path not in path.split(os.pathsep):
             os.environ["PATH"] = f"{venv_path}{os.pathsep}{path}"
+    ensure_gpu_pipeline_patch()
 
 
 def output_dir() -> Path:
@@ -57,3 +71,19 @@ def worker_log() -> Path:
 
 def default_precision() -> str:
     return os.environ.get("ZIMAGE_DEFAULT_PRECISION", "q4")
+
+
+def cpu_offload_enabled() -> bool:
+    return os.environ.get("ZIMAGE_CPU_OFFLOAD", "0").lower() in ("1", "true", "yes")
+
+
+def gpu_monitor_enabled() -> bool:
+    return os.environ.get("ZIMAGE_GPU_MONITOR", "1").lower() in ("1", "true", "yes")
+
+
+def idle_unload_minutes() -> float:
+    return float(os.environ.get("ZIMAGE_IDLE_UNLOAD_MINUTES", "5"))
+
+
+def data_dir() -> Path:
+    return Path(os.environ.get("Z_IMAGE_STUDIO_DATA_DIR", ROOT / "data"))

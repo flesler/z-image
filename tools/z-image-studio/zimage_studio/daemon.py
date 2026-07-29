@@ -31,13 +31,17 @@ def cmd_start() -> int:
             return 1
 
     python = VENV_BIN / "python"
-    with logfile.open("a") as log:
-        proc = subprocess.Popen(
-            [str(python), "-m", "zimage_studio.worker_server", default_precision()],
-            cwd=ROOT,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-        )
+    log = logfile.open("a", buffering=1)
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    proc = subprocess.Popen(
+        [str(python), "-m", "zimage_studio.worker_server", default_precision()],
+        cwd=ROOT,
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        env=env,
+    )
+    # Keep log handle open for the worker process lifetime (do not close here).
     PIDFILE.write_text(str(proc.pid))
     print(f"starting worker (pid {proc.pid}), warming {default_precision()} — tail {logfile}")
 

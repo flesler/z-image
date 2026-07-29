@@ -1,18 +1,45 @@
 from __future__ import annotations
 
-import shutil
 import sys
 from pathlib import Path
 
+from zimage.engine import load_pipeline
+
 from .config import apply_env, compare_dir
 from .generate import run_generate
-from .loras import LoraSpec, random_seed, resolve_spec
-from .naming import compare_filename, compare_stem, slugify
-from .worker_client import ensure_worker
+from .loras import LoraSpec, apply_triggers, normalize_prompt, random_seed, resolve_spec
+from .naming import compare_filename, compare_stem
+from .pipeline_jobs import run_batch_on_pipe
+from .text_encoder import release_text_encoder
+from .worker_client import ensure_worker, generate_batch_via_worker
+
+
+def collect_prompts(*, inline: list[str] | None, files: list[Path]) -> list[str]:
+    """Merge --prompt and --prompt-file lines; skip empty and duplicates (order preserved)."""
+    prompts: list[str] = []
+    seen: set[str] = set()
+
+    def add(raw: str) -> None:
+        text = normalize_prompt(raw)
+        if not text or text in seen:
+            return
+        seen.add(text)
+        prompts.append(text)
+
+    for prompt in inline or []:
+        add(prompt)
+    for path in files:
+        if not path.is_file():
+            raise SystemExit(f"prompt file not found: {path}")
+        for line in path.read_text(encoding="utf-8").splitlines():
+            add(line)
+    if not prompts:
+        raise SystemExit("need at least one --prompt or --prompt-file")
+    return prompts
 
 
 def run_compare(
-    prompt: str,
+    prompts: list[str],
     *,
     loras: list[str],
     seed: int | None = None,
@@ -28,6 +55,9 @@ def run_compare(
     override: bool = False,
 ) -> list[Path]:
     apply_env()
+    prompts = [normalize_prompt(p) for p in prompts]
+    if not prompts:
+        raise SystemExit("need at least one --prompt")
     if not loras:
         raise SystemExit("need at least one --lora name[:strength]")
     if repeat < 1:
@@ -40,7 +70,6 @@ def run_compare(
 
     root = compare_dir()
     root.mkdir(parents=True, exist_ok=True)
-    prompt_slug = slugify(prompt)
 
     if not cold:
         ensure_worker(cold=False)
@@ -50,15 +79,13 @@ def run_compare(
     for rep in range(repeat):
         if repeat > 1:
             print(f"repeat {rep + 1}/{repeat}", file=sys.stderr)
-        if seed_set:
-            iter_seed = (seed or 0) + rep
-        else:
-            iter_seed = random_seed()
         outputs.extend(
             _run_one_compare(
-                prompt=prompt,
+                prompts=prompts,
                 resolved=resolved,
-                iter_seed=iter_seed,
+                rep=rep,
+                seed=seed,
+                seed_set=seed_set,
                 root=root,
                 width=width,
                 height=height,
@@ -72,18 +99,43 @@ def run_compare(
         )
 
     print(f"compare root: {root}", file=sys.stderr)
-    pattern = f"{prompt_slug}--{width}x{height}--s*"
-    listed = sorted(root.glob(pattern))
-    for path in listed:
+    for path in outputs:
         print(path)
-    return listed
+    return outputs
+
+
+def _prompt_seed(*, seed: int | None, seed_set: bool, rep: int, prompt_idx: int, n_prompts: int) -> int:
+    if seed_set:
+        return (seed or 0) + rep * n_prompts + prompt_idx
+    return random_seed()
+
+
+def _model_variants(
+    resolved: list[LoraSpec],
+    *,
+    each: bool,
+    combo: bool,
+) -> list[tuple[str, list[LoraSpec], str]]:
+    models: list[tuple[str, list[LoraSpec], str]] = [("base", [], "base")]
+    if each:
+        for spec in resolved:
+            models.append((f"lora {spec}", [spec], spec.name))
+    if combo and len(resolved) > 1:
+        combo_name = "_combo" + "".join(f"+{spec.name}" for spec in resolved)
+        models.append((f"lora combo ({len(resolved)})", resolved, combo_name))
+    elif combo and len(resolved) == 1 and not each:
+        spec = resolved[0]
+        models.append((f"lora {spec}", [spec], spec.name))
+    return models
 
 
 def _run_one_compare(
     *,
-    prompt: str,
+    prompts: list[str],
     resolved: list[LoraSpec],
-    iter_seed: int,
+    rep: int,
+    seed: int | None,
+    seed_set: bool,
     root: Path,
     width: int,
     height: int,
@@ -94,60 +146,74 @@ def _run_one_compare(
     cold: bool,
     override: bool,
 ) -> list[Path]:
-    stem = compare_stem(prompt, width, height, iter_seed)
-    print(f"seed: {iter_seed}", file=sys.stderr)
-    shared_base: Path | None = None
     outputs: list[Path] = []
+    jobs: list[dict] = []
+    models = _model_variants(resolved, each=each, combo=combo)
 
-    def run_gen(label: str, output: Path, lora_specs: list[str] | None = None) -> None:
-        if not override and output.is_file():
-            print(f"⊘ skip {label} (exists) → {output}", file=sys.stderr)
-            return
-        print(f"→ {label} → {output}", file=sys.stderr)
-        run_generate(
-            prompt,
-            loras=lora_specs or [],
-            seed=iter_seed,
+    for model_label, lora_specs, variant in models:
+        for prompt_idx, prompt in enumerate(prompts):
+            iter_seed = _prompt_seed(
+                seed=seed,
+                seed_set=seed_set,
+                rep=rep,
+                prompt_idx=prompt_idx,
+                n_prompts=len(prompts),
+            )
+            if prompt_idx == 0 and model_label == "base":
+                print(f"seed: {iter_seed}" + (f" (+1 per prompt)" if len(prompts) > 1 and seed_set else ""), file=sys.stderr)
+            final_prompt = apply_triggers(prompt, [str(spec) for spec in lora_specs])
+            stem = compare_stem(prompt, width, height, iter_seed)
+            output = root / compare_filename(stem, variant)
+
+            if not override and output.is_file():
+                print(f"⊘ skip {model_label} (exists) → {output}", file=sys.stderr)
+                outputs.append(output)
+                continue
+
+            print(f"→ {model_label} → {output}", file=sys.stderr)
+            if final_prompt != prompt:
+                print(f"prompt: {final_prompt}", file=sys.stderr)
+            jobs.append(
+                {
+                    "prompt": final_prompt,
+                    "output": str(output),
+                    "seed": iter_seed,
+                    "loras": [{"file": spec.file, "strength": spec.strength} for spec in lora_specs],
+                }
+            )
+            outputs.append(output)
+
+    if not jobs:
+        return outputs
+
+    if cold:
+        pipe = load_pipeline(precision=precision)
+        try:
+            from .loras import resolve_path
+
+            resolved_jobs = []
+            for job in jobs:
+                loras = [
+                    (str(resolve_path(entry["file"])), float(entry["strength"]))
+                    for entry in job.get("loras", [])
+                ]
+                resolved_jobs.append({**job, "loras": loras})
+            run_batch_on_pipe(
+                pipe,
+                resolved_jobs,
+                steps=steps,
+                width=width,
+                height=height,
+            )
+        finally:
+            release_text_encoder(pipe)
+    else:
+        generate_batch_via_worker(
+            jobs=jobs,
             width=width,
             height=height,
             steps=steps,
             precision=precision,
-            output=output,
-            cold=cold,
         )
-        outputs.append(output)
-
-    def ensure_base() -> Path:
-        nonlocal shared_base
-        base_out = root / compare_filename(stem, "base")
-        if not override and base_out.is_file():
-            shared_base = base_out
-            print(f"⊘ skip base (exists) → {base_out}", file=sys.stderr)
-            return base_out
-        if shared_base and shared_base.is_file():
-            if shared_base != base_out:
-                shutil.copy2(shared_base, base_out)
-                print(f"→ base (cached) → {base_out}", file=sys.stderr)
-            return base_out
-        run_gen("base", base_out)
-        shared_base = base_out
-        return base_out
-
-    def compare_pair(spec: LoraSpec) -> None:
-        lora_out = root / compare_filename(stem, spec.name)
-        ensure_base()
-        run_gen(f"lora {spec}", lora_out, [str(spec)])
-
-    if each:
-        for spec in resolved:
-            compare_pair(spec)
-
-    if combo and len(resolved) > 1:
-        combo_name = "_combo" + "".join(f"+{spec.name}" for spec in resolved)
-        lora_out = root / compare_filename(stem, combo_name)
-        ensure_base()
-        run_gen(f"lora combo ({len(resolved)})", lora_out, [str(spec) for spec in resolved])
-    elif combo and len(resolved) == 1 and not each:
-        compare_pair(resolved[0])
 
     return outputs

@@ -25,6 +25,13 @@ def random_seed() -> int:
     return random.randint(1, 2**31 - 1)
 
 
+def normalize_prompt(prompt: str) -> str:
+    """Unify line endings; map literal \\n (JSON/CLI escapes) to real newlines."""
+    prompt = prompt.replace("\r\n", "\n").replace("\r", "\n")
+    if "\\n" in prompt:
+        prompt = prompt.replace("\\n", "\n")
+    return prompt
+
 def normalize_filename(name: str) -> str:
     base = Path(name).name
     if not base.endswith(".safetensors"):
@@ -105,6 +112,6 @@ def benchmark_plan(
         if not prompts:
             continue
         for prompt in prompts:
-            rows.append((file, prompt, seed_base + idx * repeat))
+            rows.append((file, normalize_prompt(prompt), seed_base + idx * repeat))
             idx += 1
     return rows

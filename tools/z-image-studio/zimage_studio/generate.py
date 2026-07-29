@@ -4,8 +4,8 @@ import sys
 from pathlib import Path
 
 from .config import apply_env, output_dir
-from .loras import LoraSpec, apply_triggers, random_seed, resolve_spec
-from .naming import slugify
+from .loras import LoraSpec, apply_triggers, normalize_prompt, random_seed, resolve_spec
+from .naming import output_filename
 from .worker_client import ensure_worker, generate_cold, generate_via_worker
 
 
@@ -23,13 +23,14 @@ def run_generate(
     extra: list[str] | None = None,
 ) -> Path:
     apply_env()
+    prompt = normalize_prompt(prompt)
     loras = loras or []
     seed = seed if seed is not None else random_seed()
 
     if output is None:
         out_dir = output_dir()
         out_dir.mkdir(parents=True, exist_ok=True)
-        output = out_dir / f"{slugify(prompt)}--{width}x{height}--s{seed}.png"
+        output = out_dir / output_filename(prompt, width, height, seed)
 
     print(f"seed: {seed}", file=sys.stderr)
     print(f"→ {output}", file=sys.stderr)
