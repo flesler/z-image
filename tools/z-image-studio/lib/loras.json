@@ -1,0 +1,59 @@
+{
+  "DarkGhibliZ.safetensors": {
+    "trigger": "Studio Ghibli Dark Fairytale",
+    "default_strength": 0.85,
+    "prompts": [
+      "a lonely child walking through an enchanted forest at dusk, fireflies, mossy ancient trees, soft mist",
+      "cozy witch cottage interior, warm candlelight, stacked books, sleeping cats, wooden beams",
+      "vast cloudy sky over rolling green hills, tiny figure with a red umbrella on a winding path",
+      "underwater spirit garden, bioluminescent jellyfish, peaceful mood, shafts of light from above"
+    ]
+  },
+  "RealisticSnapshot-Zimage-Turbov5.safetensors": {
+    "trigger": "",
+    "default_strength": 0.65,
+    "prompts": [
+      "candid street portrait of a woman laughing, amateur snapshot, urban background, natural imperfect framing",
+      "friends at a house party, harsh on-camera flash, motion blur, messy kitchen, candid smartphone photo",
+      "selfie in a bathroom mirror, smartphone capture, slightly overexposed flash, casual everyday moment",
+      "golden retriever in a sunny park, low angle pet photo, slightly blurry, joyful amateur snapshot"
+    ]
+  },
+  "Purple_grainy_zit.safetensors": {
+    "trigger": "",
+    "default_strength": 1.0,
+    "prompts": [
+      "portrait of an old fisherman, weathered face, grainy film texture, purple color cast, documentary photo",
+      "neon-lit alley at night, lonely figure walking away, cinematic grain, moody purple haze",
+      "young couple on a rooftop at twilight, city skyline, purple atmospheric haze, intimate candid photo",
+      "still life of wilted flowers in a glass vase, moody interior light, heavy film grain, purple shadows"
+    ]
+  },
+  "ZiTMythG0thicL1nes.safetensors": {
+    "trigger": "G0thicL1nes",
+    "default_strength": 0.8,
+    "prompts": [
+      "mythic warrior queen on a cliff at sunset, ornate armor, epic fantasy illustration",
+      "ancient dragon coiled around a ruined cathedral, gothic linework, dramatic clouds",
+      "elven archer in a misty birch forest, intricate costume details, tall trees, ethereal light",
+      "celestial goddess floating above clouds, flowing robes, epic scale, intricate line art"
+    ]
+  },
+  "ZiTMythR3alisticF.safetensors": {
+    "trigger": "R3alisticF",
+    "default_strength": 0.8,
+    "prompts": [
+      "mythic warrior queen on a cliff at sunset, ornate armor, epic fantasy illustration",
+      "battle-scarred knight resting by a campfire, painterly realism, worn armor, quiet night",
+      "sorceress conjuring lightning in a stormy tower chamber, dramatic painterly fantasy",
+      "mermaid kingdom palace under waves, bioluminescent coral, painterly underwater fantasy scene"
+    ]
+  },
+  "MidJourneyNSFWZ.safetensors": {
+    "trigger": "ArtfulNSFW",
+    "default_strength": 0.8,
+    "prompts": [
+      "The image is a digital painting of a woman in a dark and eerie setting. She is wearing a black dress with a hood that covers her head and shoulders. The dress is long and flowing covering her body and her legs. The woman is standing in a body of water with her arms resting on her knees and her head tilted back as if she is deep in thought. The background is a dark moody color with a hint of smoke or fog. The overall mood of the image is mysterious and eerie."
+    ]
+  }
+}
