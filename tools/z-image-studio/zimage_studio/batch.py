@@ -10,7 +10,7 @@ from .worker_client import ensure_worker, generate_batch_via_worker
 
 
 def collect_prompts(*, inline: list[str] | None, files: list[Path]) -> list[str]:
-    """Merge --prompt and --prompt-file lines; skip empty and duplicates (order preserved)."""
+    """Merge --prompt and --prompt-file lines; skip empty, # comments, and duplicates (order preserved)."""
     prompts: list[str] = []
     seen: set[str] = set()
 
@@ -27,6 +27,8 @@ def collect_prompts(*, inline: list[str] | None, files: list[Path]) -> list[str]
         if not path.is_file():
             raise SystemExit(f"prompt file not found: {path}")
         for line in path.read_text(encoding="utf-8").splitlines():
+            if line.lstrip().startswith("#"):
+                continue
             add(line)
     if not prompts:
         raise SystemExit("need at least one --prompt or --prompt-file")
@@ -155,9 +157,9 @@ def run_batch(
     return outputs
 
 
-def _log_generated(path: str | Path, elapsed_s: float, *, partial: bool = False) -> None:
+def _log_generated(path: str | Path, elapsed_s: float, *, index: int, partial: bool = False) -> None:
     tag = " partial" if partial else ""
-    print(f"{path} {elapsed_s:.1f}s{tag}", file=sys.stderr, flush=True)
+    print(f"{index:02d}. {path} {elapsed_s:.1f}s{tag}", file=sys.stderr, flush=True)
 
 
 def _model_variants(
@@ -242,17 +244,25 @@ def _run_one_batch(
     if not jobs or dry_run:
         return outputs
 
+    img_n = 0
+
+    def on_image(result: dict) -> None:
+        nonlocal img_n
+        img_n += 1
+        _log_generated(
+            result["output"],
+            result["elapsed_s"],
+            index=img_n,
+            partial=reuse_steps,
+        )
+
     generate_batch_via_worker(
         jobs=jobs,
         width=width,
         height=height,
         precision=precision,
         reuse_steps=reuse_steps,
-        on_image=lambda r: _log_generated(
-            r["output"],
-            r["elapsed_s"],
-            partial=reuse_steps,
-        ),
+        on_image=on_image,
     )
 
     return outputs
