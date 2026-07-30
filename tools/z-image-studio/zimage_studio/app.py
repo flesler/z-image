@@ -12,13 +12,36 @@ from .batch import collect_prompts, dedupe_ints, normalize_steps_list, run_batch
 from .config import DEFAULT_IMG2IMG_STRENGTH, DEFAULT_STEPS, PREVIEW_STEPS, apply_env
 from .daemon import main as daemon_main
 from .generate import run_generate
+from .sizes import ASPECT_BASE_CHOICES, resolve_dimensions, size_choices
+
+
+def _add_size_flags(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--size",
+        choices=size_choices(),
+        metavar="PRESET",
+        help="preset dimensions: " + ", ".join(size_choices()),
+    )
+    p.add_argument(
+        "--aspect-ratio",
+        metavar="W:H",
+        help="width:height ratio; width from --aspect-base (default 1024, use 1080 for social)",
+    )
+    p.add_argument(
+        "--aspect-base",
+        type=int,
+        choices=list(ASPECT_BASE_CHOICES),
+        default=1024,
+        help="reference width for --aspect-ratio (1080 snaps to 1088 for VAE)",
+    )
+    p.add_argument("--width", "-w", type=int, default=None)
+    p.add_argument("--height", "-H", type=int, default=None)
 
 
 def _add_gen_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--lora", action="append", default=[], metavar="NAME[:STRENGTH]")
     p.add_argument("--precision", default=None)
-    p.add_argument("--width", "-w", type=int, default=1024)
-    p.add_argument("--height", "-H", type=int, default=1024)
+    _add_size_flags(p)
     p.add_argument("--seed", type=int)
     p.add_argument("--steps", type=int, default=None)
     p.add_argument("--image", type=Path, metavar="PATH", help="init image for img2img")
@@ -46,8 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
     batch.add_argument("--lora", action="append", default=None, metavar="NAME[:STRENGTH]|*", help="repeatable; omit for base-only; use '*' for all catalog LoRAs")
     batch.add_argument("--seed", action="append", type=int, default=None, metavar="N", help="repeatable base seed; with --repeat N uses N+1 seeds: base..base+N")
     batch.add_argument("--repeat", type=int, default=1, help="extra seeds after base: --repeat 1 → 2 seeds, --repeat 3 → 4 seeds")
-    batch.add_argument("--width", "-w", type=int, default=1024)
-    batch.add_argument("--height", "-H", type=int, default=1024)
+    _add_size_flags(batch)
     batch.add_argument("--steps", action="append", type=int, default=None, metavar="N", help=f"repeatable inference steps; default {DEFAULT_STEPS}")
     batch.add_argument(
         "--preview",
@@ -106,12 +128,19 @@ def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
     if args.command == "gen":
         if args.strength is not None and args.image is None:
             raise SystemExit("--strength requires --image")
+        width, height = resolve_dimensions(
+            size=args.size,
+            aspect_ratio=args.aspect_ratio,
+            aspect_base=args.aspect_base,
+            width=args.width,
+            height=args.height,
+        )
         run_generate(
             args.prompt,
             loras=args.lora,
             precision=args.precision,
-            width=args.width,
-            height=args.height,
+            width=width,
+            height=height,
             seed=args.seed,
             steps=args.steps,
             output=args.output,
@@ -125,14 +154,21 @@ def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
         if args.preview and args.steps:
             raise SystemExit("--preview and --steps are mutually exclusive")
         seeds = dedupe_ints(args.seed)
+        width, height = resolve_dimensions(
+            size=args.size,
+            aspect_ratio=args.aspect_ratio,
+            aspect_base=args.aspect_base,
+            width=args.width,
+            height=args.height,
+        )
         run_batch(
             collect_prompts(inline=args.prompt, files=args.prompt_file),
             loras=args.lora or [],
             seeds=seeds,
             seed_set=bool(seeds),
             repeat=args.repeat,
-            width=args.width,
-            height=args.height,
+            width=width,
+            height=height,
             steps_list=normalize_steps_list(args.steps),
             preview=args.preview,
             precision=args.precision,
