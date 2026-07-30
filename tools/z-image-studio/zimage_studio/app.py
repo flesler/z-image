@@ -18,7 +18,8 @@ def _add_gen_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--width", "-w", type=int, default=1024)
     p.add_argument("--height", "-H", type=int, default=1024)
     p.add_argument("--seed", type=int)
-    p.add_argument("--steps", type=int, default=9)
+    # Docs say 8/9 is optimal. I experimented, 3 is already very coherent
+    p.add_argument("--steps", type=int, default=3)
     p.add_argument("--output", "-o", type=Path)
     p.add_argument("--cold", action="store_true")
 
@@ -39,7 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--repeat", type=int, default=1)
     compare.add_argument("--width", "-w", type=int, default=1024)
     compare.add_argument("--height", "-H", type=int, default=1024)
-    compare.add_argument("--steps", action="append", type=int, default=None, metavar="N", help="repeatable inference steps; default 9")
+    compare.add_argument("--steps", action="append", type=int, default=None, metavar="N", help="repeatable inference steps; default 3")
     compare.add_argument("--precision", default="q4")
     compare.add_argument("--no-base", action="store_true", help="skip base model images (default: include base)")
     compare.add_argument("--each", action="store_true")
@@ -57,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--override", action="store_true")
 
     daemon = sub.add_parser("daemon", help="warm worker daemon")
-    daemon.add_argument("action", choices=["start", "stop", "status", "logs"])
+    daemon.add_argument("action", choices=["start", "stop", "restart", "status", "logs"])
 
     cache = sub.add_parser("cache", help="prompt embed disk cache")
     cache.add_argument("action", nargs="?", default="list", choices=["list", "prune", "rm"])

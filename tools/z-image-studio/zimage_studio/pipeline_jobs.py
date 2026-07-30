@@ -178,41 +178,37 @@ def run_batch_on_pipe(
     for loras_key, model_jobs in model_groups.items():
         loras = list(loras_key) if loras_key else None
         label = "base" if not loras else f"lora×{len(loras)}"
-        prompt_groups: OrderedDict[str, list[dict]] = OrderedDict()
-        for job in model_jobs:
-            prompt_groups.setdefault(job["prompt"], []).append(job)
         multi_steps = len({job_steps(job) for job in model_jobs}) > 1
         emit(f"model {label}: {len(model_jobs)} image(s)")
         _load_loras(pipe, loras)
         try:
-            for prompt, prompt_jobs in prompt_groups.items():
-                for job in prompt_jobs:
-                    step_count = job_steps(job)
-                    step_tag = f" s{step_count}" if multi_steps else ""
-                    img_n += 1
-                    t_img = time.perf_counter()
-                    image = _denoise_on_pipe(
-                        pipe,
-                        steps=step_count,
-                        width=width,
-                        height=height,
-                        seed=int(job["seed"]),
-                        prompt_embeds=embeds_by_prompt[job["prompt"]],
-                    )
-                    output = Path(job["output"])
-                    output.parent.mkdir(parents=True, exist_ok=True)
-                    image.save(output)
-                    img_s = time.perf_counter() - t_img
-                    emit(f"image {img_n}/{len(jobs)}: {img_s:.1f}s {label}{step_tag} → {output.name}")
-                    result = {
-                            "output": str(output),
-                            "loras": len(loras or []),
-                            "steps": step_count,
-                            "elapsed_s": round(img_s, 2),
-                        }
-                    results.append(result)
-                    if on_image:
-                        on_image(result)
+            for job in model_jobs:
+                step_count = job_steps(job)
+                step_tag = f" s{step_count}" if multi_steps else ""
+                img_n += 1
+                t_img = time.perf_counter()
+                image = _denoise_on_pipe(
+                    pipe,
+                    steps=step_count,
+                    width=width,
+                    height=height,
+                    seed=int(job["seed"]),
+                    prompt_embeds=embeds_by_prompt[job["prompt"]],
+                )
+                output = Path(job["output"])
+                output.parent.mkdir(parents=True, exist_ok=True)
+                image.save(output)
+                img_s = time.perf_counter() - t_img
+                emit(f"image {img_n}/{len(jobs)}: {img_s:.1f}s {label}{step_tag} → {output.name}")
+                result = {
+                    "output": str(output),
+                    "loras": len(loras or []),
+                    "steps": step_count,
+                    "elapsed_s": round(img_s, 2),
+                }
+                results.append(result)
+                if on_image:
+                    on_image(result)
         finally:
             _unload_loras(pipe, loras)
             if torch.cuda.is_available():

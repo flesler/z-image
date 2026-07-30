@@ -69,6 +69,12 @@ def cmd_stop() -> int:
     return 0
 
 
+def cmd_restart() -> int:
+    cmd_stop()
+    time.sleep(1)
+    return cmd_start()
+
+
 def cmd_status() -> int:
     if is_healthy():
         pid = PIDFILE.read_text().strip() if PIDFILE.is_file() else "?"
@@ -87,7 +93,7 @@ def cmd_logs() -> int:
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     if not argv or argv[0] in ("-h", "--help"):
-        print("Usage: zimage_studio daemon {start|stop|status|logs}")
+        print("Usage: zimage_studio daemon {start|stop|restart|status|logs}")
         return 0 if not argv else 1
 
     cmd = argv[0]
@@ -95,6 +101,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_start()
     if cmd == "stop":
         return cmd_stop()
+    if cmd == "restart":
+        return cmd_restart()
     if cmd == "status":
         return cmd_status()
     if cmd == "logs":
