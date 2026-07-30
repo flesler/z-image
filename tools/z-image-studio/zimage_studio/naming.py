@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import re
 
-from .config import SLUG_MAX
-
-DEFAULT_COMPARE_STEPS = 9
+from .config import resolve_steps, SLUG_MAX
 
 _slug_re = re.compile(r"[^a-z0-9]+")
 
@@ -20,11 +18,12 @@ def compare_stem(
     width: int,
     height: int,
     seed: int,
-    steps: int = DEFAULT_COMPARE_STEPS,
+    steps: int | None = None,
 ) -> str:
+    resolved = resolve_steps(steps)
     base = f"{slugify(prompt)}-{width}x{height}-{seed}"
-    if steps != DEFAULT_COMPARE_STEPS:
-        base += f"-s{steps}"
+    if resolved != resolve_steps(None):
+        base += f"-s{resolved}"
     return base
 
 
@@ -33,7 +32,7 @@ def output_filename(
     width: int,
     height: int,
     seed: int,
-    steps: int = DEFAULT_COMPARE_STEPS,
+    steps: int | None = None,
 ) -> str:
     return f"{compare_stem(prompt, width, height, seed, steps)}.png"
 

@@ -9,6 +9,8 @@ LIB_DIR = ROOT / "lib"
 LORAS_JSON = Path(os.environ.get("ZIMAGE_LORAS_MAP", LIB_DIR / "loras.json"))
 PIDFILE = ROOT / ".worker.pid"
 SLUG_MAX = 48
+DEFAULT_STEPS = 8
+PREVIEW_STEPS = 3
 
 _patch_installed = False
 
@@ -83,6 +85,14 @@ def worker_log() -> Path:
 
 def default_precision() -> str:
     return os.environ.get("ZIMAGE_DEFAULT_PRECISION", "q4")
+
+
+def resolve_steps(steps: int | None) -> int:
+    return DEFAULT_STEPS if steps is None else int(steps)
+
+
+def resolve_precision(precision: str | None) -> str:
+    return default_precision() if precision is None else precision
 
 
 def cpu_offload_enabled() -> bool:

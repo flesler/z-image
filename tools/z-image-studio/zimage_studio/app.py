@@ -9,19 +9,18 @@ from pathlib import Path
 from .benchmark import run_benchmark
 from .cache_cmd import run_cache
 from .compare import collect_prompts, dedupe_ints, normalize_steps_list, run_compare
-from .config import apply_env
+from .config import DEFAULT_STEPS, PREVIEW_STEPS, apply_env
 from .daemon import main as daemon_main
 from .generate import run_generate
 
 
 def _add_gen_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--lora", action="append", default=[], metavar="NAME[:STRENGTH]")
-    p.add_argument("--precision", default="q4")
+    p.add_argument("--precision", default=None)
     p.add_argument("--width", "-w", type=int, default=1024)
     p.add_argument("--height", "-H", type=int, default=1024)
     p.add_argument("--seed", type=int)
-    # Docs say 8/9 is optimal. I experimented, 4 is already very coherent
-    p.add_argument("--steps", type=int, default=4)
+    p.add_argument("--steps", type=int, default=None)
     p.add_argument("--output", "-o", type=Path)
 
 
@@ -37,19 +36,24 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--prompt", action="append", default=None, metavar="TEXT", help="repeatable")
     compare.add_argument("--prompt-file", action="append", default=[], type=Path, metavar="FILE", help="one prompt per line; skips empty and duplicates")
     compare.add_argument("--lora", action="append", default=None, metavar="NAME[:STRENGTH]|*", help="repeatable; omit for base-only; use '*' for all catalog LoRAs")
-    compare.add_argument("--seed", action="append", type=int, default=None, metavar="N", help="repeatable; full grid per seed")
-    compare.add_argument("--repeat", type=int, default=1)
+    compare.add_argument("--seed", action="append", type=int, default=None, metavar="N", help="repeatable base seed; with --repeat N uses N..N+repeat-1 per value")
+    compare.add_argument("--repeat", type=int, default=1, help="seed count from base: base, base+1, … (random base if --seed omitted)")
     compare.add_argument("--width", "-w", type=int, default=1024)
     compare.add_argument("--height", "-H", type=int, default=1024)
-    compare.add_argument("--steps", action="append", type=int, default=None, metavar="N", help="repeatable inference steps; default 4")
-    compare.add_argument("--precision", default="q4")
+    compare.add_argument("--steps", action="append", type=int, default=None, metavar="N", help=f"repeatable inference steps; default {DEFAULT_STEPS}")
+    compare.add_argument(
+        "--preview",
+        action="store_true",
+        help=f"fast preview at {PREVIEW_STEPS} steps; same filenames as default (no -s{{N}} suffix)",
+    )
+    compare.add_argument("--precision", default=None)
     compare.add_argument("--no-base", action="store_true", help="skip base model images (default: include base)")
     compare.add_argument("--each", action="store_true")
     compare.add_argument("--combo", action="store_true")
     compare.add_argument(
-        "--each-step",
+        "--reuse-steps",
         action="store_true",
-        help="run each --steps value as a separate denoise (skip step-reuse optimization)",
+        help="merge same prompt/seed/model runs: one denoise at max steps, partial x0 snapshots (faster, lower quality)",
     )
     compare.add_argument("--override", action="store_true")
     compare.add_argument("--dry-run", action="store_true", help="print planned outputs only, do not generate")
@@ -98,6 +102,8 @@ def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
         return 0
 
     if args.command == "compare":
+        if args.preview and args.steps:
+            raise SystemExit("--preview and --steps are mutually exclusive")
         seeds = dedupe_ints(args.seed)
         run_compare(
             collect_prompts(inline=args.prompt, files=args.prompt_file),
@@ -108,11 +114,12 @@ def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
             width=args.width,
             height=args.height,
             steps_list=normalize_steps_list(args.steps),
+            preview=args.preview,
             precision=args.precision,
             each=args.each,
             combo=args.combo,
             include_base=not args.no_base,
-            each_step=args.each_step,
+            reuse_steps=args.reuse_steps,
             override=args.override,
             dry_run=args.dry_run,
         )

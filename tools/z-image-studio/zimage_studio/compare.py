@@ -3,9 +3,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from .config import apply_env, compare_dir
+from .config import PREVIEW_STEPS, apply_env, compare_dir, resolve_steps
 from .loras import LoraSpec, apply_triggers, expand_lora_specs, normalize_prompt, random_seed, resolve_spec
-from .naming import DEFAULT_COMPARE_STEPS, compare_filename, compare_stem
+from .naming import compare_filename, compare_stem
 from .worker_client import ensure_worker, generate_batch_via_worker
 
 
@@ -47,14 +47,25 @@ def dedupe_ints(values: list[int] | None) -> list[int]:
     return out
 
 
-def normalize_steps_list(values: list[int] | None) -> list[int]:
+def normalize_steps_list(values: list[int] | None) -> list[int] | None:
     steps = dedupe_ints(values)
     if not steps:
-        return [DEFAULT_COMPARE_STEPS]
+        return None
     for step in steps:
         if step < 1:
             raise SystemExit("--steps values must be >= 1")
     return steps
+
+
+def expand_seed_runs(seeds: list[int] | None, repeat: int, *, seed_set: bool) -> list[int]:
+    if repeat < 1:
+        raise SystemExit("--repeat must be >= 1")
+    if seed_set:
+        if not seeds:
+            raise SystemExit("need at least one --seed value")
+        return [s + i for s in seeds for i in range(repeat)]
+    base = random_seed()
+    return [base + i for i in range(repeat)]
 
 
 def run_compare(
@@ -67,11 +78,12 @@ def run_compare(
     width: int = 1024,
     height: int = 1024,
     steps_list: list[int] | None = None,
-    precision: str = "q4",
+    precision: str | None = None,
     each: bool = False,
     combo: bool = False,
     include_base: bool = True,
-    each_step: bool = False,
+    reuse_steps: bool = False,
+    preview: bool = False,
     override: bool = False,
     dry_run: bool = False,
 ) -> list[Path]:
@@ -84,9 +96,14 @@ def run_compare(
     if repeat < 1:
         raise SystemExit("--repeat must be >= 1")
 
-    steps_list = steps_list or [DEFAULT_COMPARE_STEPS]
-    if len(steps_list) > 1 or steps_list[0] != DEFAULT_COMPARE_STEPS:
-        print(f"steps: {', '.join(str(s) for s in steps_list)}", file=sys.stderr)
+    default_steps = resolve_steps(None)
+    if preview:
+        steps_list = [PREVIEW_STEPS]
+        print(f"preview: {PREVIEW_STEPS} steps", file=sys.stderr)
+    else:
+        steps_list = normalize_steps_list(steps_list) or [default_steps]
+        if len(steps_list) > 1 or steps_list[0] != default_steps:
+            print(f"steps: {', '.join(str(s) for s in steps_list)}", file=sys.stderr)
 
     wildcard = loras and any(s.split(":", 1)[0].strip().lower() in ("*", "all") for s in loras)
     loras = expand_lora_specs(loras) if loras else []
@@ -104,42 +121,42 @@ def run_compare(
     if not dry_run:
         ensure_worker()
 
-    seed_runs = seeds if seed_set else [None]
-    if seed_set and not seeds:
-        raise SystemExit("need at least one --seed value")
-    if seed_set and len(seeds) > 1:
-        print(f"seeds: {', '.join(str(s) for s in seeds)}", file=sys.stderr)
+    seed_runs = expand_seed_runs(seeds, repeat, seed_set=seed_set)
+    if len(seed_runs) == 1:
+        suffix = " (random)" if not seed_set else ""
+        print(f"seed: {seed_runs[0]}{suffix}", file=sys.stderr)
+    else:
+        if not seed_set:
+            print(f"seed: {seed_runs[0]} (random)", file=sys.stderr)
+        print(f"seeds: {', '.join(str(s) for s in seed_runs)}", file=sys.stderr)
 
     outputs: list[Path] = []
-
-    for rep in range(repeat):
-        if repeat > 1:
-            print(f"repeat {rep + 1}/{repeat}", file=sys.stderr)
-        outputs.extend(
-            _run_one_compare(
-                prompts=prompts,
-                resolved=resolved,
-                seed_runs=seed_runs,
-                seed_set=seed_set,
-                root=root,
-                width=width,
-                height=height,
-                steps_list=steps_list,
-                precision=precision,
-                each=each,
-                combo=combo,
-                include_base=include_base,
-                each_step=each_step,
-                override=override,
-                dry_run=dry_run,
-            )
+    outputs.extend(
+        _run_one_compare(
+            prompts=prompts,
+            resolved=resolved,
+            seed_runs=seed_runs,
+            root=root,
+            width=width,
+            height=height,
+            steps_list=steps_list,
+            precision=precision,
+            each=each,
+            combo=combo,
+            include_base=include_base,
+            reuse_steps=reuse_steps,
+            preview=preview,
+            override=override,
+            dry_run=dry_run,
         )
+    )
 
     return outputs
 
 
-def _log_generated(path: str | Path, elapsed_s: float) -> None:
-    print(f"{path} {elapsed_s:.1f}s", file=sys.stderr, flush=True)
+def _log_generated(path: str | Path, elapsed_s: float, *, partial: bool = False) -> None:
+    tag = " partial" if partial else ""
+    print(f"{path} {elapsed_s:.1f}s{tag}", file=sys.stderr, flush=True)
 
 
 def _model_variants(
@@ -168,8 +185,7 @@ def _run_one_compare(
     *,
     prompts: list[str],
     resolved: list[LoraSpec],
-    seed_runs: list[int | None],
-    seed_set: bool,
+    seed_runs: list[int],
     root: Path,
     width: int,
     height: int,
@@ -178,7 +194,8 @@ def _run_one_compare(
     each: bool,
     combo: bool,
     include_base: bool,
-    each_step: bool,
+    reuse_steps: bool,
+    preview: bool,
     override: bool,
     dry_run: bool,
 ) -> list[Path]:
@@ -188,19 +205,16 @@ def _run_one_compare(
     if not models:
         raise SystemExit("no model variants to run (use --lora and/or drop --no-base)")
 
-    for seed_idx, run_seed in enumerate(seed_runs):
-        iter_seed = run_seed if seed_set else random_seed()
-        if seed_set and len(seed_runs) > 1:
+    for iter_seed in seed_runs:
+        if len(seed_runs) > 1:
             print(f"seed run: {iter_seed}", file=sys.stderr)
-        elif seed_idx == 0:
-            suffix = " (random)" if not seed_set else ""
-            print(f"seed: {iter_seed}{suffix}", file=sys.stderr)
 
         for model_label, lora_specs, variant in models:
             for prompt in prompts:
                 for step_count in steps_list:
                     final_prompt = apply_triggers(prompt, [str(spec) for spec in lora_specs])
-                    stem = compare_stem(prompt, width, height, iter_seed, step_count)
+                    name_steps = None if preview else step_count
+                    stem = compare_stem(prompt, width, height, iter_seed, name_steps)
                     output = root / compare_filename(stem, variant)
 
                     step_label = f" s{step_count}" if len(steps_list) > 1 else ""
@@ -231,10 +245,13 @@ def _run_one_compare(
         jobs=jobs,
         width=width,
         height=height,
-        steps=DEFAULT_COMPARE_STEPS,
         precision=precision,
-        each_step=each_step,
-        on_image=lambda r: _log_generated(r["output"], r["elapsed_s"]),
+        reuse_steps=reuse_steps,
+        on_image=lambda r: _log_generated(
+            r["output"],
+            r["elapsed_s"],
+            partial=reuse_steps,
+        ),
     )
 
     return outputs

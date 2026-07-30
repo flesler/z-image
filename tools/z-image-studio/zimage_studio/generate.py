@@ -13,11 +13,11 @@ def run_generate(
     prompt: str,
     *,
     loras: list[str] | None = None,
-    precision: str = "q4",
+    precision: str | None = None,
     width: int = 1024,
     height: int = 1024,
     seed: int | None = None,
-    steps: int = 9,
+    steps: int | None = None,
     output: Path | None = None,
     extra: list[str] | None = None,
 ) -> Path:
@@ -29,7 +29,7 @@ def run_generate(
     if output is None:
         out_dir = output_dir()
         out_dir.mkdir(parents=True, exist_ok=True)
-        output = out_dir / output_filename(prompt, width, height, seed)
+        output = out_dir / output_filename(prompt, width, height, seed, steps)
 
     print(f"seed: {seed}", file=sys.stderr)
     print(f"→ {output}", file=sys.stderr)

@@ -151,7 +151,7 @@ def _denoise_on_pipe_with_snapshots(
     )
 
     pending = set(snapshots.keys())
-    t_run = time.perf_counter()
+    t_last = time.perf_counter()
     device = pipe_device(pipe)
     generator = torch.Generator(device=device).manual_seed(seed)
     prompt_embeds = [tensor.to(device) for tensor in prompt_embeds]
@@ -214,14 +214,16 @@ def _denoise_on_pipe_with_snapshots(
                 image.save(output)
                 pending.discard(completed)
                 if on_snapshot:
+                    now = time.perf_counter()
                     on_snapshot(
                         {
                             "output": str(output),
                             "loras": loras_count,
                             "steps": completed,
-                            "elapsed_s": round(time.perf_counter() - t_run, 2),
+                            "elapsed_s": round(now - t_last, 2),
                         }
                     )
+                    t_last = now
 
             latents = pipe.scheduler.step(noise_pred.to(torch.float32), t, latents, return_dict=False)[0]
 
@@ -274,8 +276,7 @@ def run_batch_on_pipe(
     *,
     width: int,
     height: int,
-    default_steps: int = 9,
-    merge_steps: bool = True,
+    reuse_steps: bool = False,
     log: Callable[[str], None] | None = None,
     reloaded: bool = False,
     on_image: Callable[[dict], None] | None = None,
@@ -291,7 +292,7 @@ def run_batch_on_pipe(
             torch.cuda.set_device(dev)
 
     def job_steps(job: dict) -> int:
-        return int(job.get("steps", default_steps))
+        return int(job["steps"])
 
     emit = log or (lambda msg: print(msg, file=sys.stderr, flush=True))
     model_groups: OrderedDict[tuple[tuple[str, float], ...], list[dict]] = OrderedDict()
@@ -322,7 +323,7 @@ def run_batch_on_pipe(
         label = "base" if not loras else f"lora×{len(loras)}"
         multi_steps = len({job_steps(job) for job in model_jobs}) > 1
         collapsed_jobs = (
-            _collapse_step_jobs(model_jobs, job_steps) if merge_steps else model_jobs
+            _collapse_step_jobs(model_jobs, job_steps) if reuse_steps else model_jobs
         )
         emit(f"model {label}: {len(model_jobs)} image(s)")
         _load_loras(pipe, loras)

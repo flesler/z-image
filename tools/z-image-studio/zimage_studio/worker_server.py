@@ -12,7 +12,7 @@ from pathlib import Path
 import zimage.engine as zengine
 from zimage.paths import get_loras_dir
 
-from .config import apply_env, default_precision, idle_unload_minutes, load_pipeline, worker_host, worker_port
+from .config import apply_env, default_precision, idle_unload_minutes, load_pipeline, resolve_precision, resolve_steps, worker_host, worker_port
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
 from .job_monitor import JobMonitor, log_summary
 from .loras import resolve_path
@@ -50,8 +50,8 @@ def run_generate_job(body: dict) -> dict:
     width = int(body.get("width", 1024))
     height = int(body.get("height", 1024))
     seed = int(body.get("seed", 42))
-    precision = body.get("precision", default_precision())
-    steps = int(body.get("steps", 9))
+    precision = resolve_precision(body.get("precision"))
+    steps = resolve_steps(body.get("steps"))
     loras = resolve_loras(body.get("loras", []))
 
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -98,8 +98,7 @@ def run_generate_batch(body: dict, *, on_image=None) -> dict:
 
     width = int(body.get("width", 1024))
     height = int(body.get("height", 1024))
-    steps = int(body.get("steps", 9))
-    precision = body.get("precision", default_precision())
+    precision = resolve_precision(body.get("precision"))
 
     reset_vram_peak()
     reloaded = current_pipe() is None
@@ -119,8 +118,7 @@ def run_generate_batch(body: dict, *, on_image=None) -> dict:
             resolved_jobs,
             width=width,
             height=height,
-            default_steps=steps,
-            merge_steps=not body.get("each_step", False),
+            reuse_steps=body.get("reuse_steps", False),
             log=log,
             reloaded=reloaded,
             on_image=on_image,

@@ -9,7 +9,7 @@ import torch
 import zimage.engine as engine
 from diffusers.pipelines.z_image.pipeline_z_image import ZImagePipeline
 
-from .config import cpu_offload_enabled, gpu_monitor_enabled, verbose_enabled
+from .config import cpu_offload_enabled, gpu_monitor_enabled, resolve_steps, verbose_enabled
 from .text_encoder import ensure_text_encoder, release_text_encoder
 
 _installed = False
@@ -30,7 +30,7 @@ def _patch_pipeline() -> None:
         if not cpu_offload_enabled() and kwargs.get("prompt") is not None:
             ensure_text_encoder(self)
         if gpu_monitor_enabled() and not cpu_offload_enabled():
-            steps = kwargs.get("num_inference_steps", 9)
+            steps = resolve_steps(kwargs.get("num_inference_steps"))
             t0 = time.perf_counter()
 
             def on_step(p, step_index, _timestep, callback_kwargs):

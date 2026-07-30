@@ -51,21 +51,23 @@ def generate_via_worker(
     width: int,
     height: int,
     seed: int,
-    steps: int,
-    precision: str,
+    steps: int | None = None,
+    precision: str | None = None,
     loras: list[LoraSpec],
 ) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
+    payload: dict = {
         "prompt": prompt,
         "output": str(output),
         "width": width,
         "height": height,
         "seed": seed,
-        "steps": steps,
-        "precision": precision,
         "loras": [{"file": spec.file, "strength": spec.strength} for spec in loras],
     }
+    if steps is not None:
+        payload["steps"] = steps
+    if precision is not None:
+        payload["precision"] = precision
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
         generate_url(),
@@ -83,20 +85,19 @@ def generate_batch_via_worker(
     jobs: list[dict],
     width: int,
     height: int,
-    steps: int,
-    precision: str,
-    each_step: bool = False,
+    precision: str | None,
+    reuse_steps: bool = False,
     on_image=None,
 ) -> dict:
-    payload = {
+    payload: dict = {
         "jobs": jobs,
         "width": width,
         "height": height,
-        "steps": steps,
-        "precision": precision,
-        "each_step": each_step,
+        "reuse_steps": reuse_steps,
         "stream": True,
     }
+    if precision is not None:
+        payload["precision"] = precision
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
         generate_batch_url(),
