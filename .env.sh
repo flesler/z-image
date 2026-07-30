@@ -1,4 +1,4 @@
-# Source before running zimg: source tools/z-image-studio/.env.sh
+# Source before running zimg: source .env.sh
 export Z_IMAGE_STUDIO_DATA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/data"
 export Z_IMAGE_STUDIO_OUTPUT_DIR="$Z_IMAGE_STUDIO_DATA_DIR/outputs"
 export HF_HOME="$Z_IMAGE_STUDIO_DATA_DIR/huggingface"

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "z-image"
+version = "0.1.0"
+description = "CLI and worker for Z-Image-Turbo generation with LoRA batching"
+readme = "README.md"
+requires-python = ">=3.12"
+
+[project.scripts]
+zimg = "zimage_studio.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["zimage_studio*"]

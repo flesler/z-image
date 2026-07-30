@@ -17,7 +17,7 @@ Describe the specific action involving the hands (e.g., “gently holding a glas
 # LoRA batch
 
 ```bash
-ZIMG=tools/z-image-studio/cli.py
+ZIMG=./cli.py
 
 $ZIMG daemon start
 $ZIMG gen "prompt" --lora DarkGhibliZ

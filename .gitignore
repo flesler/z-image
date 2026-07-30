@@ -2,5 +2,5 @@
 tmp
 *.pyc
 .venv
-tools/z-image-studio/data
-tools/z-image-studio/.worker.pid
+data
+.worker.pid
