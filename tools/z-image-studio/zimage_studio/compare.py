@@ -200,8 +200,8 @@ def _run_one_compare(
             print(f"seed: {iter_seed}{suffix}", file=sys.stderr)
 
         for model_label, lora_specs, variant in models:
-            for step_count in steps_list:
-                for prompt in prompts:
+            for prompt in prompts:
+                for step_count in steps_list:
                     final_prompt = apply_triggers(prompt, [str(spec) for spec in lora_specs])
                     stem = compare_stem(prompt, width, height, iter_seed, step_count)
                     output = root / compare_filename(stem, variant)

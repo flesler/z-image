@@ -178,15 +178,17 @@ def run_batch_on_pipe(
     for loras_key, model_jobs in model_groups.items():
         loras = list(loras_key) if loras_key else None
         label = "base" if not loras else f"lora×{len(loras)}"
-        steps_groups: OrderedDict[int, list[dict]] = OrderedDict()
+        prompt_groups: OrderedDict[str, list[dict]] = OrderedDict()
         for job in model_jobs:
-            steps_groups.setdefault(job_steps(job), []).append(job)
+            prompt_groups.setdefault(job["prompt"], []).append(job)
+        multi_steps = len({job_steps(job) for job in model_jobs}) > 1
         emit(f"model {label}: {len(model_jobs)} image(s)")
         _load_loras(pipe, loras)
         try:
-            for step_count, step_jobs in steps_groups.items():
-                step_tag = f" s{step_count}" if len(steps_groups) > 1 else ""
-                for job in step_jobs:
+            for prompt, prompt_jobs in prompt_groups.items():
+                for job in prompt_jobs:
+                    step_count = job_steps(job)
+                    step_tag = f" s{step_count}" if multi_steps else ""
                     img_n += 1
                     t_img = time.perf_counter()
                     image = _denoise_on_pipe(
