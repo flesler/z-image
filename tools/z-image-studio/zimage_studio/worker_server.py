@@ -9,10 +9,20 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-import zimage.engine as zengine
 from zimage.paths import get_loras_dir
 
-from .config import apply_env, default_precision, idle_unload_minutes, load_pipeline, resolve_precision, resolve_steps, resolve_strength, worker_host, worker_port
+from .config import (
+    apply_env,
+    default_precision,
+    ensure_gpu_pipeline_patch,
+    idle_unload_minutes,
+    load_pipeline,
+    resolve_precision,
+    resolve_steps,
+    resolve_strength,
+    worker_host,
+    worker_port,
+)
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
 from .init_image import load_init_image
 from .job_monitor import JobMonitor, log_summary
@@ -23,6 +33,7 @@ from .prompt_embed_cache import prune, remove_legacy_layout
 from .text_encoder import release_text_encoder
 
 apply_env()
+ensure_gpu_pipeline_patch()
 LORAS_DIR = get_loras_dir()
 _idle_guard = IdleGuard()
 
@@ -240,7 +251,7 @@ def main() -> None:
         log(f"cache prune: removed {pruned['removed']}, {pruned['remaining']} remaining")
 
     log(f"warming up precision={precision}")
-    zengine.load_pipeline(precision=precision)
+    load_pipeline(precision=precision)
     release_text_encoder(current_pipe())
     log_pipe(current_pipe(), label="warmup")
     _idle_guard.start()

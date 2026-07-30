@@ -8,7 +8,6 @@ from pathlib import Path
 
 from .config import VENV_BIN, ROOT, apply_env, worker_host, worker_port
 from .loras import LoraSpec, resolve_path
-from zimage.engine import generate_image
 
 
 def health_url() -> str:
@@ -150,6 +149,11 @@ def generate_cold(
     extra: list[str] | None = None,
 ) -> None:
     apply_env()
+    from .config import ensure_gpu_pipeline_patch
+
+    ensure_gpu_pipeline_patch()
+    from zimage.engine import generate_image
+
     output.parent.mkdir(parents=True, exist_ok=True)
     lora_paths = [(str(resolve_path(spec.file)), spec.strength) for spec in loras]
     image = generate_image(

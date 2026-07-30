@@ -58,7 +58,6 @@ def apply_env() -> None:
         venv_path = str(VENV_BIN)
         if venv_path not in path.split(os.pathsep):
             os.environ["PATH"] = f"{venv_path}{os.pathsep}{path}"
-    ensure_gpu_pipeline_patch()
 
 
 def output_dir() -> Path:
