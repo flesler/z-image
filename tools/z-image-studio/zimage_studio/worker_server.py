@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import time
+import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -23,12 +24,13 @@ from .config import (
     worker_host,
     worker_port,
 )
+from .exceptions import ClientDisconnected
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
 from .init_image import load_init_image
 from .job_monitor import JobMonitor, log_summary
 from .loras import resolve_path
 from .pipeline_cache import IdleGuard, current_pipe
-from .pipeline_jobs import generate_one, run_batch_on_pipe
+from .pipeline_jobs import generate_one, recover_pipe, run_batch_on_pipe
 from .prompt_embed_cache import prune, remove_legacy_layout
 from .text_encoder import release_text_encoder
 
@@ -90,6 +92,9 @@ def run_generate_job(body: dict) -> dict:
             init_image=init_image,
             strength=strength,
         )
+    except Exception:
+        recover_pipe(current_pipe())
+        raise
     finally:
         if monitor_ctx:
             monitor_ctx.__exit__(None, None, None)
@@ -149,8 +154,11 @@ def run_generate_batch(body: dict, *, on_image=None) -> dict:
             reloaded=reloaded,
             on_image=on_image,
         )
-        release_text_encoder(pipe)
+    except ClientDisconnected:
+        log("batch cancelled: client disconnected")
+        raise
     finally:
+        recover_pipe(pipe)
         monitor = monitor_ctx.summary() if monitor_ctx else None
         if monitor_ctx:
             monitor_ctx.__exit__(None, None, None)
@@ -206,8 +214,12 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         self._json(200, run_generate_batch(body))
                     return
+        except ClientDisconnected:
+            log("client disconnected")
+            return
         except Exception as e:
             log(f"error: {e}")
+            traceback.print_exc()
             self._json(500, {"error": str(e)})
             return
 
@@ -218,19 +230,36 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/x-ndjson")
         self.end_headers()
 
+        disconnected = False
+
         def write_event(obj: dict) -> None:
-            self.wfile.write((json.dumps(obj) + "\n").encode())
-            self.wfile.flush()
+            nonlocal disconnected
+            try:
+                self.wfile.write((json.dumps(obj) + "\n").encode())
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError) as e:
+                disconnected = True
+                raise ClientDisconnected("client disconnected") from e
 
         try:
             def on_image(result: dict) -> None:
                 write_event({"type": "image", **result})
 
             summary = run_generate_batch(body, on_image=on_image)
-            write_event({"type": "done", **summary})
+            if not disconnected:
+                write_event({"type": "done", **summary})
+        except ClientDisconnected:
+            log("client disconnected during batch stream")
         except Exception as e:
             log(f"error: {e}")
-            write_event({"type": "error", "error": str(e)})
+            traceback.print_exc()
+            if not disconnected:
+                try:
+                    write_event({"type": "error", "error": str(e)})
+                except ClientDisconnected:
+                    log("client disconnected during error response")
+        finally:
+            recover_pipe(current_pipe())
 
     def _json(self, code: int, obj: dict) -> None:
         data = json.dumps(obj).encode()

@@ -14,6 +14,7 @@ from safetensors.torch import load_file
 from PIL import Image
 
 from .config import load_pipeline
+from .exceptions import ClientDisconnected
 from .text_encoder import encode_prompts, pipe_device, release_text_encoder
 
 
@@ -49,6 +50,28 @@ def _unload_loras(pipe, loras: list[tuple[str, float]] | None) -> None:
         pipe.transformer.unload_lora()
     except Exception as e:
         print(f"[worker] failed to unload LoRA: {e}", flush=True)
+
+
+def recover_pipe(pipe) -> None:
+    """Reset pipeline state after errors or client disconnect."""
+    if pipe is None:
+        return
+    try:
+        pipe.transformer.unload_lora()
+    except Exception:
+        pass
+    release_text_encoder(pipe)
+    scheduler = getattr(pipe, "scheduler", None)
+    if scheduler is not None:
+        if hasattr(scheduler, "set_begin_index"):
+            try:
+                scheduler.set_begin_index(0)
+            except Exception:
+                pass
+        if hasattr(scheduler, "_step_index"):
+            scheduler._step_index = None
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def _lora_key(loras: list[tuple[str, float]] | None) -> tuple[tuple[str, float], ...]:
@@ -379,8 +402,11 @@ def run_batch_on_pipe(
 
     results: list[dict] = []
     img_n = 0
+    aborted = False
 
     for loras_key, model_jobs in model_groups.items():
+        if aborted:
+            break
         loras = list(loras_key) if loras_key else None
         label = "base" if not loras else f"lora×{len(loras)}"
         multi_steps = len({job_steps(job) for job in model_jobs}) > 1
@@ -391,10 +417,14 @@ def run_batch_on_pipe(
         _load_loras(pipe, loras)
         try:
             for job in collapsed_jobs:
+                if aborted:
+                    break
                 snapshots: dict[int, str | Path] | None = job.get("snapshots")
                 if snapshots:
                     def on_snapshot(result: dict) -> None:
-                        nonlocal img_n
+                        nonlocal img_n, aborted
+                        if aborted:
+                            return
                         img_n += 1
                         emit(
                             f"image {img_n}/{len(jobs)}: {result['elapsed_s']:.1f}s "
@@ -402,19 +432,27 @@ def run_batch_on_pipe(
                         )
                         results.append(result)
                         if on_image:
-                            on_image(result)
+                            try:
+                                on_image(result)
+                            except ClientDisconnected:
+                                aborted = True
+                                raise
 
-                    _denoise_on_pipe_with_snapshots(
-                        pipe,
-                        max_steps=job_steps(job),
-                        snapshots=snapshots,
-                        width=width,
-                        height=height,
-                        seed=int(job["seed"]),
-                        prompt_embeds=embeds_by_prompt[job["prompt"]],
-                        on_snapshot=on_snapshot,
-                        loras_count=len(loras or []),
-                    )
+                    try:
+                        _denoise_on_pipe_with_snapshots(
+                            pipe,
+                            max_steps=job_steps(job),
+                            snapshots=snapshots,
+                            width=width,
+                            height=height,
+                            seed=int(job["seed"]),
+                            prompt_embeds=embeds_by_prompt[job["prompt"]],
+                            on_snapshot=on_snapshot,
+                            loras_count=len(loras or []),
+                        )
+                    except ClientDisconnected:
+                        aborted = True
+                        break
                     continue
 
                 step_count = job_steps(job)
@@ -456,11 +494,21 @@ def run_batch_on_pipe(
                 }
                 results.append(result)
                 if on_image:
-                    on_image(result)
+                    try:
+                        on_image(result)
+                    except ClientDisconnected:
+                        aborted = True
+                        break
+        except ClientDisconnected:
+            aborted = True
         finally:
             _unload_loras(pipe, loras)
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+
+    if aborted:
+        emit("batch aborted (client disconnected)")
+        raise ClientDisconnected("client disconnected")
 
     denoise_s = time.perf_counter() - t0 - encode_s
     return results, encode_s, denoise_s
@@ -500,4 +548,4 @@ def generate_one(
         traceback.print_exc()
         raise
     finally:
-        release_text_encoder(pipe)
+        recover_pipe(pipe)
