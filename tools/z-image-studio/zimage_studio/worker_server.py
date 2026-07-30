@@ -120,6 +120,7 @@ def run_generate_batch(body: dict, *, on_image=None) -> dict:
             width=width,
             height=height,
             default_steps=steps,
+            merge_steps=not body.get("each_step", False),
             log=log,
             reloaded=reloaded,
             on_image=on_image,

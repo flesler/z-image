@@ -31,8 +31,8 @@ def is_healthy() -> bool:
         return False
 
 
-def ensure_worker(cold: bool = False) -> None:
-    if cold or is_healthy():
+def ensure_worker() -> None:
+    if is_healthy():
         return
     print("starting warm worker...", flush=True)
     python = VENV_BIN / "python"
@@ -85,6 +85,7 @@ def generate_batch_via_worker(
     height: int,
     steps: int,
     precision: str,
+    each_step: bool = False,
     on_image=None,
 ) -> dict:
     payload = {
@@ -93,6 +94,7 @@ def generate_batch_via_worker(
         "height": height,
         "steps": steps,
         "precision": precision,
+        "each_step": each_step,
         "stream": True,
     }
     data = json.dumps(payload).encode()

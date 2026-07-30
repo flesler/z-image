@@ -3,12 +3,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from .config import apply_env, compare_dir, load_pipeline
-from .generate import run_generate
+from .config import apply_env, compare_dir
 from .loras import LoraSpec, apply_triggers, expand_lora_specs, normalize_prompt, random_seed, resolve_spec
 from .naming import DEFAULT_COMPARE_STEPS, compare_filename, compare_stem
-from .pipeline_jobs import run_batch_on_pipe
-from .text_encoder import release_text_encoder
 from .worker_client import ensure_worker, generate_batch_via_worker
 
 
@@ -74,7 +71,7 @@ def run_compare(
     each: bool = False,
     combo: bool = False,
     include_base: bool = True,
-    cold: bool = False,
+    each_step: bool = False,
     override: bool = False,
     dry_run: bool = False,
 ) -> list[Path]:
@@ -104,8 +101,8 @@ def run_compare(
     root = compare_dir()
     root.mkdir(parents=True, exist_ok=True)
 
-    if not cold and not dry_run:
-        ensure_worker(cold=False)
+    if not dry_run:
+        ensure_worker()
 
     seed_runs = seeds if seed_set else [None]
     if seed_set and not seeds:
@@ -132,7 +129,7 @@ def run_compare(
                 each=each,
                 combo=combo,
                 include_base=include_base,
-                cold=cold,
+                each_step=each_step,
                 override=override,
                 dry_run=dry_run,
             )
@@ -181,7 +178,7 @@ def _run_one_compare(
     each: bool,
     combo: bool,
     include_base: bool,
-    cold: bool,
+    each_step: bool,
     override: bool,
     dry_run: bool,
 ) -> list[Path]:
@@ -230,36 +227,14 @@ def _run_one_compare(
     if not jobs or dry_run:
         return outputs
 
-    if cold:
-        pipe = load_pipeline(precision=precision)
-        try:
-            from .loras import resolve_path
-
-            resolved_jobs = []
-            for job in jobs:
-                loras = [
-                    (str(resolve_path(entry["file"])), float(entry["strength"]))
-                    for entry in job.get("loras", [])
-                ]
-                resolved_jobs.append({**job, "loras": loras})
-            run_batch_on_pipe(
-                pipe,
-                resolved_jobs,
-                width=width,
-                height=height,
-                default_steps=DEFAULT_COMPARE_STEPS,
-                on_image=lambda r: _log_generated(r["output"], r["elapsed_s"]),
-            )
-        finally:
-            release_text_encoder(pipe)
-    else:
-        generate_batch_via_worker(
-            jobs=jobs,
-            width=width,
-            height=height,
-            steps=DEFAULT_COMPARE_STEPS,
-            precision=precision,
-            on_image=lambda r: _log_generated(r["output"], r["elapsed_s"]),
-        )
+    generate_batch_via_worker(
+        jobs=jobs,
+        width=width,
+        height=height,
+        steps=DEFAULT_COMPARE_STEPS,
+        precision=precision,
+        each_step=each_step,
+        on_image=lambda r: _log_generated(r["output"], r["elapsed_s"]),
+    )
 
     return outputs

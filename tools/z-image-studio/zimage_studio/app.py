@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
+import time
 from pathlib import Path
 
 from .benchmark import run_benchmark
@@ -18,10 +20,9 @@ def _add_gen_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--width", "-w", type=int, default=1024)
     p.add_argument("--height", "-H", type=int, default=1024)
     p.add_argument("--seed", type=int)
-    # Docs say 8/9 is optimal. I experimented, 3 is already very coherent
-    p.add_argument("--steps", type=int, default=3)
+    # Docs say 8/9 is optimal. I experimented, 4 is already very coherent
+    p.add_argument("--steps", type=int, default=4)
     p.add_argument("--output", "-o", type=Path)
-    p.add_argument("--cold", action="store_true")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -40,12 +41,16 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--repeat", type=int, default=1)
     compare.add_argument("--width", "-w", type=int, default=1024)
     compare.add_argument("--height", "-H", type=int, default=1024)
-    compare.add_argument("--steps", action="append", type=int, default=None, metavar="N", help="repeatable inference steps; default 3")
+    compare.add_argument("--steps", action="append", type=int, default=None, metavar="N", help="repeatable inference steps; default 4")
     compare.add_argument("--precision", default="q4")
     compare.add_argument("--no-base", action="store_true", help="skip base model images (default: include base)")
     compare.add_argument("--each", action="store_true")
     compare.add_argument("--combo", action="store_true")
-    compare.add_argument("--cold", action="store_true")
+    compare.add_argument(
+        "--each-step",
+        action="store_true",
+        help="run each --steps value as a separate denoise (skip step-reuse optimization)",
+    )
     compare.add_argument("--override", action="store_true")
     compare.add_argument("--dry-run", action="store_true", help="print planned outputs only, do not generate")
     compare.add_argument("--verbose", action="store_true", help="extra diagnostics (implied by --dry-run)")
@@ -54,7 +59,6 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--lora", action="append", default=[], metavar="NAME[:STRENGTH]")
     bench.add_argument("--seed-base", type=int, default=401)
     bench.add_argument("--repeat", type=int, default=1)
-    bench.add_argument("--cold", action="store_true")
     bench.add_argument("--override", action="store_true")
 
     daemon = sub.add_parser("daemon", help="warm worker daemon")
@@ -67,7 +71,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def _log_cli_total(t0: float) -> None:
+    elapsed = time.perf_counter() - t0
+    print(f"total {elapsed:.2f}s", file=sys.stderr, flush=True)
+
+
+def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
+    started = t0 if t0 is not None else time.perf_counter()
     args = build_parser().parse_args(argv)
     if getattr(args, "verbose", False) or getattr(args, "dry_run", False):
         os.environ["ZIMAGE_VERBOSE"] = "1"
@@ -83,8 +93,8 @@ def main(argv: list[str] | None = None) -> int:
             seed=args.seed,
             steps=args.steps,
             output=args.output,
-            cold=args.cold,
         )
+        _log_cli_total(started)
         return 0
 
     if args.command == "compare":
@@ -102,10 +112,11 @@ def main(argv: list[str] | None = None) -> int:
             each=args.each,
             combo=args.combo,
             include_base=not args.no_base,
-            cold=args.cold,
+            each_step=args.each_step,
             override=args.override,
             dry_run=args.dry_run,
         )
+        _log_cli_total(started)
         return 0
 
     if args.command == "benchmark":
@@ -113,9 +124,9 @@ def main(argv: list[str] | None = None) -> int:
             filters=args.lora or None,
             seed_base=args.seed_base,
             repeat=args.repeat,
-            cold=args.cold,
             override=args.override,
         )
+        _log_cli_total(started)
         return 0
 
     if args.command == "daemon":

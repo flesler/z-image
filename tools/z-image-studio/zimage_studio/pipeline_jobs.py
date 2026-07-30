@@ -55,6 +55,49 @@ def _lora_key(loras: list[tuple[str, float]] | None) -> tuple[tuple[str, float],
     return tuple(loras)
 
 
+def _job_group_key(job: dict) -> tuple:
+    loras = job.get("loras") or []
+    if loras and isinstance(loras[0], dict):
+        lora_key = tuple((entry["file"], float(entry.get("strength", 1.0))) for entry in loras)
+    else:
+        lora_key = _lora_key(loras or None)
+    return (job["prompt"], int(job["seed"]), lora_key)
+
+
+def _collapse_step_jobs(model_jobs: list[dict], job_steps: Callable[[dict], int]) -> list[dict]:
+    """Merge pending jobs that share prompt/seed/lora; run once at max remaining steps."""
+    collapsed: list[dict] = []
+    i = 0
+    while i < len(model_jobs):
+        key = _job_group_key(model_jobs[i])
+        group = [model_jobs[i]]
+        i += 1
+        while i < len(model_jobs) and _job_group_key(model_jobs[i]) == key:
+            group.append(model_jobs[i])
+            i += 1
+        if len(group) == 1:
+            collapsed.append(group[0])
+            continue
+        snapshots = {job_steps(entry): entry["output"] for entry in group}
+        collapsed.append(
+            {
+                "prompt": group[0]["prompt"],
+                "seed": group[0]["seed"],
+                "loras": group[0].get("loras"),
+                "steps": max(snapshots),
+                "snapshots": snapshots,
+            }
+        )
+    return collapsed
+
+
+def _latents_to_pil(pipe, latents):
+    latents = latents.to(pipe.vae.dtype)
+    latents = (latents / pipe.vae.config.scaling_factor) + pipe.vae.config.shift_factor
+    image = pipe.vae.decode(latents, return_dict=False)[0]
+    return pipe.image_processor.postprocess(image, output_type="pil")[0]
+
+
 def _denoise_on_pipe(
     pipe,
     *,
@@ -86,6 +129,104 @@ def _denoise_on_pipe(
 
     with torch.inference_mode():
         return pipe(**gen_kwargs).images[0]
+
+
+def _denoise_on_pipe_with_snapshots(
+    pipe,
+    *,
+    max_steps: int,
+    snapshots: dict[int, str | Path],
+    width: int,
+    height: int,
+    seed: int,
+    prompt_embeds: list[torch.Tensor],
+    on_snapshot: Callable[[dict], None] | None = None,
+    loras_count: int = 0,
+) -> None:
+    """One max-step denoise; decode predicted x0 at each pending step (not noisy latents)."""
+    from diffusers.pipelines.z_image.pipeline_z_image import (
+        calculate_shift,
+        get_default_z_image_sigmas,
+        retrieve_timesteps,
+    )
+
+    pending = set(snapshots.keys())
+    t_run = time.perf_counter()
+    device = pipe_device(pipe)
+    generator = torch.Generator(device=device).manual_seed(seed)
+    prompt_embeds = [tensor.to(device) for tensor in prompt_embeds]
+
+    with torch.inference_mode():
+        latents = pipe.prepare_latents(
+            1,
+            pipe.transformer.in_channels,
+            height,
+            width,
+            torch.float32,
+            device,
+            generator,
+            None,
+        )
+        image_seq_len = (latents.shape[2] // 2) * (latents.shape[3] // 2)
+        mu = calculate_shift(
+            image_seq_len,
+            pipe.scheduler.config.get("base_image_seq_len", 256),
+            pipe.scheduler.config.get("max_image_seq_len", 4096),
+            pipe.scheduler.config.get("base_shift", 0.5),
+            pipe.scheduler.config.get("max_shift", 1.15),
+        )
+        sigmas = get_default_z_image_sigmas(max_steps)
+        timesteps, _ = retrieve_timesteps(
+            pipe.scheduler,
+            max_steps,
+            device,
+            sigmas=sigmas,
+            mu=mu,
+        )
+        pipe.scheduler.set_begin_index(0)
+
+        for i, t in enumerate(timesteps):
+            timestep = t.expand(latents.shape[0])
+            timestep = (1000 - timestep) / 1000
+            latent_model_input = latents.to(pipe.transformer.dtype).unsqueeze(2)
+            latent_model_input_list = list(latent_model_input.unbind(dim=0))
+            model_out_list = pipe.transformer(
+                latent_model_input_list,
+                timestep,
+                prompt_embeds,
+                return_dict=False,
+            )[0]
+            noise_pred = torch.stack([out.float() for out in model_out_list], dim=0).squeeze(2)
+            # Z-Image convention: negate before scheduler.step
+            noise_pred = -noise_pred
+
+            if pipe.scheduler.step_index is None:
+                pipe.scheduler._init_step_index(t)
+            sigma = pipe.scheduler.sigmas[pipe.scheduler.step_index]
+            # Flow-match predicted clean latent (VAE-decodable), not noisy x_t
+            x0 = latents.float() - sigma * noise_pred
+
+            completed = i + 1
+            if completed in pending:
+                image = _latents_to_pil(pipe, x0)
+                output = Path(snapshots[completed])
+                output.parent.mkdir(parents=True, exist_ok=True)
+                image.save(output)
+                pending.discard(completed)
+                if on_snapshot:
+                    on_snapshot(
+                        {
+                            "output": str(output),
+                            "loras": loras_count,
+                            "steps": completed,
+                            "elapsed_s": round(time.perf_counter() - t_run, 2),
+                        }
+                    )
+
+            latents = pipe.scheduler.step(noise_pred.to(torch.float32), t, latents, return_dict=False)[0]
+
+    if pending:
+        raise RuntimeError(f"step snapshots missing after denoise: {sorted(pending)}")
 
 
 def run_on_pipe(
@@ -134,6 +275,7 @@ def run_batch_on_pipe(
     width: int,
     height: int,
     default_steps: int = 9,
+    merge_steps: bool = True,
     log: Callable[[str], None] | None = None,
     reloaded: bool = False,
     on_image: Callable[[dict], None] | None = None,
@@ -179,10 +321,39 @@ def run_batch_on_pipe(
         loras = list(loras_key) if loras_key else None
         label = "base" if not loras else f"lora×{len(loras)}"
         multi_steps = len({job_steps(job) for job in model_jobs}) > 1
+        collapsed_jobs = (
+            _collapse_step_jobs(model_jobs, job_steps) if merge_steps else model_jobs
+        )
         emit(f"model {label}: {len(model_jobs)} image(s)")
         _load_loras(pipe, loras)
         try:
-            for job in model_jobs:
+            for job in collapsed_jobs:
+                snapshots: dict[int, str | Path] | None = job.get("snapshots")
+                if snapshots:
+                    def on_snapshot(result: dict) -> None:
+                        nonlocal img_n
+                        img_n += 1
+                        emit(
+                            f"image {img_n}/{len(jobs)}: {result['elapsed_s']:.1f}s "
+                            f"{label} s{result['steps']} → {Path(result['output']).name}"
+                        )
+                        results.append(result)
+                        if on_image:
+                            on_image(result)
+
+                    _denoise_on_pipe_with_snapshots(
+                        pipe,
+                        max_steps=job_steps(job),
+                        snapshots=snapshots,
+                        width=width,
+                        height=height,
+                        seed=int(job["seed"]),
+                        prompt_embeds=embeds_by_prompt[job["prompt"]],
+                        on_snapshot=on_snapshot,
+                        loras_count=len(loras or []),
+                    )
+                    continue
+
                 step_count = job_steps(job)
                 step_tag = f" s{step_count}" if multi_steps else ""
                 img_n += 1

@@ -12,7 +12,6 @@ def run_benchmark(
     filters: list[str] | None = None,
     seed_base: int = 401,
     repeat: int = 1,
-    cold: bool = False,
     override: bool = False,
 ) -> None:
     apply_env()
@@ -34,6 +33,5 @@ def run_benchmark(
             repeat=repeat,
             combo=True,
             each=False,
-            cold=cold,
             override=override,
         )

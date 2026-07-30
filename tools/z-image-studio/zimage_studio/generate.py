@@ -6,7 +6,7 @@ from pathlib import Path
 from .config import apply_env, output_dir
 from .loras import LoraSpec, apply_triggers, normalize_prompt, random_seed, resolve_spec
 from .naming import output_filename
-from .worker_client import ensure_worker, generate_cold, generate_via_worker
+from .worker_client import ensure_worker, generate_via_worker
 
 
 def run_generate(
@@ -19,7 +19,6 @@ def run_generate(
     seed: int | None = None,
     steps: int = 9,
     output: Path | None = None,
-    cold: bool = False,
     extra: list[str] | None = None,
 ) -> Path:
     apply_env()
@@ -40,29 +39,16 @@ def run_generate(
     if loras:
         print(f"prompt: {final_prompt}", file=sys.stderr)
 
-    if cold:
-        generate_cold(
-            prompt=final_prompt,
-            output=output,
-            width=width,
-            height=height,
-            seed=seed,
-            steps=steps,
-            precision=precision,
-            loras=resolved,
-            extra=extra,
-        )
-    else:
-        ensure_worker(cold=False)
-        generate_via_worker(
-            prompt=final_prompt,
-            output=output,
-            width=width,
-            height=height,
-            seed=seed,
-            steps=steps,
-            precision=precision,
-            loras=resolved,
-        )
+    ensure_worker()
+    generate_via_worker(
+        prompt=final_prompt,
+        output=output,
+        width=width,
+        height=height,
+        seed=seed,
+        steps=steps,
+        precision=precision,
+        loras=resolved,
+    )
 
     return output

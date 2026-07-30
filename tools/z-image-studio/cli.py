@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -34,6 +35,7 @@ def _bootstrap() -> None:
 if __name__ == "__main__":
     _ensure_venv()
     _bootstrap()
+    t0 = time.perf_counter()
     from zimage_studio.app import main
 
-    raise SystemExit(main())
+    raise SystemExit(main(t0=t0))
