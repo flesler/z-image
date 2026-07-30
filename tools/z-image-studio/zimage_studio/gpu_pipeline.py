@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Callable
+from typing import Callable, Type
 
 import torch
 import zimage.engine as engine
 from diffusers.pipelines.z_image.pipeline_z_image import ZImagePipeline
+from diffusers.pipelines.z_image.pipeline_z_image_img2img import ZImageImg2ImgPipeline
 
 from .config import cpu_offload_enabled, gpu_monitor_enabled, resolve_steps, verbose_enabled
 from .text_encoder import ensure_text_encoder, release_text_encoder
@@ -19,12 +20,16 @@ def vae_tiling_enabled() -> bool:
     return os.environ.get("ZIMAGE_VAE_TILING", "0").lower() in ("1", "true", "yes")
 
 
-def _patch_pipeline() -> None:
-    if getattr(ZImagePipeline, "_zimage_studio_gpu_patched", False):
+def _patch_pipeline_class(
+    cls: Type,
+    *,
+    patch_prepare_latents: bool,
+) -> None:
+    if getattr(cls, "_zimage_studio_gpu_patched", False):
         return
 
-    original_call = ZImagePipeline.__call__
-    original_prepare_latents = ZImagePipeline.prepare_latents
+    original_call = cls.__call__
+    original_prepare_latents = getattr(cls, "prepare_latents", None)
 
     def __call__(self, *args, **kwargs):
         if not cpu_offload_enabled() and kwargs.get("prompt") is not None:
@@ -50,16 +55,26 @@ def _patch_pipeline() -> None:
             if kwargs.get("callback_on_step_end") is None:
                 kwargs["callback_on_step_end"] = on_step
                 kwargs.setdefault("callback_on_step_end_tensor_inputs", ["latents"])
-        return original_call(self, *args, **kwargs)
-
-    def prepare_latents(self, *args, **kwargs):
-        if not cpu_offload_enabled():
+        result = original_call(self, *args, **kwargs)
+        if not cpu_offload_enabled() and not patch_prepare_latents:
             release_text_encoder(self)
-        return original_prepare_latents(self, *args, **kwargs)
+        return result
 
-    ZImagePipeline.__call__ = __call__
-    ZImagePipeline.prepare_latents = prepare_latents
-    ZImagePipeline._zimage_studio_gpu_patched = True
+    cls.__call__ = __call__
+    if patch_prepare_latents and original_prepare_latents is not None:
+
+        def prepare_latents(self, *args, **kwargs):
+            if not cpu_offload_enabled():
+                release_text_encoder(self)
+            return original_prepare_latents(self, *args, **kwargs)
+
+        cls.prepare_latents = prepare_latents
+    cls._zimage_studio_gpu_patched = True
+
+
+def _patch_pipeline() -> None:
+    _patch_pipeline_class(ZImagePipeline, patch_prepare_latents=True)
+    _patch_pipeline_class(ZImageImg2ImgPipeline, patch_prepare_latents=False)
 
 
 def install(*, log: Callable[[str], None] | None = None) -> None:

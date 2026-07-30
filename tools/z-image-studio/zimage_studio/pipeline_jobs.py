@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import Callable
 
 import torch
+from diffusers import ZImageImg2ImgPipeline
 from safetensors.torch import load_file
+from PIL import Image
 
 from .config import load_pipeline
 from .text_encoder import encode_prompts, pipe_device, release_text_encoder
@@ -131,6 +133,44 @@ def _denoise_on_pipe(
         return pipe(**gen_kwargs).images[0]
 
 
+def _img2img_on_pipe(
+    pipe,
+    *,
+    steps: int,
+    width: int,
+    height: int,
+    seed: int,
+    init_image: Image.Image,
+    strength: float,
+    prompt: str | None = None,
+    prompt_embeds: list[torch.Tensor] | None = None,
+):
+    if (prompt is None) == (prompt_embeds is None):
+        raise ValueError("provide exactly one of prompt or prompt_embeds")
+
+    img2img = ZImageImg2ImgPipeline.from_pipe(pipe, torch_dtype=None)
+    generator = torch.Generator(device=pipe_device(pipe)).manual_seed(seed)
+    gen_kwargs = {
+        "image": init_image,
+        "strength": strength,
+        "num_inference_steps": steps,
+        "height": height,
+        "width": width,
+        "guidance_scale": 0.0,
+        "generator": generator,
+    }
+    if prompt_embeds is not None:
+        device = next(pipe.transformer.parameters()).device
+        prompt_embeds = [tensor.to(device) for tensor in prompt_embeds]
+        gen_kwargs["prompt"] = None
+        gen_kwargs["prompt_embeds"] = prompt_embeds
+    else:
+        gen_kwargs["prompt"] = prompt
+
+    with torch.inference_mode():
+        return img2img(**gen_kwargs).images[0]
+
+
 def _denoise_on_pipe_with_snapshots(
     pipe,
     *,
@@ -241,9 +281,25 @@ def run_on_pipe(
     loras: list[tuple[str, float]] | None,
     prompt: str | None = None,
     prompt_embeds: list[torch.Tensor] | None = None,
+    init_image: Image.Image | None = None,
+    strength: float | None = None,
 ):
     _load_loras(pipe, loras)
     try:
+        if init_image is not None:
+            if strength is None:
+                raise ValueError("strength is required when init_image is set")
+            return _img2img_on_pipe(
+                pipe,
+                steps=steps,
+                width=width,
+                height=height,
+                seed=seed,
+                init_image=init_image,
+                strength=strength,
+                prompt=prompt,
+                prompt_embeds=prompt_embeds,
+            )
         return _denoise_on_pipe(
             pipe,
             steps=steps,
@@ -277,6 +333,8 @@ def run_batch_on_pipe(
     width: int,
     height: int,
     reuse_steps: bool = False,
+    init_image: Image.Image | None = None,
+    strength: float | None = None,
     log: Callable[[str], None] | None = None,
     reloaded: bool = False,
     on_image: Callable[[dict], None] | None = None,
@@ -284,6 +342,8 @@ def run_batch_on_pipe(
     """Run jobs grouped by model, then steps, then prompts."""
     if not jobs:
         return [], 0.0, 0.0
+    if init_image is not None and reuse_steps:
+        raise ValueError("img2img batch does not support --reuse-steps")
 
     prepare_loaded_pipe(pipe, reloaded=reloaded)
     if torch.cuda.is_available():
@@ -301,10 +361,12 @@ def run_batch_on_pipe(
         model_groups.setdefault(key, []).append(job)
 
     step_values = sorted({job_steps(job) for job in jobs})
+    mode = "img2img" if init_image is not None else "txt2img"
     emit(
         f"batch: {len(jobs)} image(s) across {len(model_groups)} model(s), "
-        f"{len({job['prompt'] for job in jobs})} unique prompt(s)"
+        f"{len({job['prompt'] for job in jobs})} unique prompt(s), {mode}"
         + (f", steps {','.join(str(s) for s in step_values)}" if len(step_values) > 1 else "")
+        + (f", strength {strength:g}" if init_image is not None and strength is not None else "")
     )
 
     all_prompts = list(dict.fromkeys(job["prompt"] for job in jobs))
@@ -359,14 +421,28 @@ def run_batch_on_pipe(
                 step_tag = f" s{step_count}" if multi_steps else ""
                 img_n += 1
                 t_img = time.perf_counter()
-                image = _denoise_on_pipe(
-                    pipe,
-                    steps=step_count,
-                    width=width,
-                    height=height,
-                    seed=int(job["seed"]),
-                    prompt_embeds=embeds_by_prompt[job["prompt"]],
-                )
+                if init_image is not None:
+                    if strength is None:
+                        raise ValueError("strength is required for img2img batch")
+                    image = _img2img_on_pipe(
+                        pipe,
+                        steps=step_count,
+                        width=width,
+                        height=height,
+                        seed=int(job["seed"]),
+                        init_image=init_image,
+                        strength=strength,
+                        prompt_embeds=embeds_by_prompt[job["prompt"]],
+                    )
+                else:
+                    image = _denoise_on_pipe(
+                        pipe,
+                        steps=step_count,
+                        width=width,
+                        height=height,
+                        seed=int(job["seed"]),
+                        prompt_embeds=embeds_by_prompt[job["prompt"]],
+                    )
                 output = Path(job["output"])
                 output.parent.mkdir(parents=True, exist_ok=True)
                 image.save(output)
@@ -400,6 +476,8 @@ def generate_one(
     loras: list[tuple[str, float]] | None,
     prompt: str | None = None,
     prompt_embeds: list[torch.Tensor] | None = None,
+    init_image: Image.Image | None = None,
+    strength: float | None = None,
 ):
     pipe = load_pipeline(precision=precision)
     if prompt is not None and prompt_embeds is None:
@@ -415,6 +493,8 @@ def generate_one(
             loras=loras,
             prompt=prompt,
             prompt_embeds=prompt_embeds,
+            init_image=init_image,
+            strength=strength,
         )
     except Exception:
         traceback.print_exc()

@@ -8,9 +8,11 @@ VENV_BIN = ROOT / ".venv" / "bin"
 LIB_DIR = ROOT / "lib"
 LORAS_JSON = Path(os.environ.get("ZIMAGE_LORAS_MAP", LIB_DIR / "loras.json"))
 PIDFILE = ROOT / ".worker.pid"
-SLUG_MAX = 48
+# 225 max filename length, deducts suffix and much to spare
+SLUG_MAX = 150
 DEFAULT_STEPS = 8
 PREVIEW_STEPS = 3
+DEFAULT_IMG2IMG_STRENGTH = 0.6
 
 _patch_installed = False
 
@@ -93,6 +95,16 @@ def resolve_steps(steps: int | None) -> int:
 
 def resolve_precision(precision: str | None) -> str:
     return default_precision() if precision is None else precision
+
+
+def resolve_strength(strength: float | None) -> float:
+    return DEFAULT_IMG2IMG_STRENGTH if strength is None else float(strength)
+
+
+def validate_strength(strength: float) -> float:
+    if strength < 0.0 or strength > 1.0:
+        raise SystemExit("--strength must be between 0.0 and 1.0")
+    return strength
 
 
 def cpu_offload_enabled() -> bool:

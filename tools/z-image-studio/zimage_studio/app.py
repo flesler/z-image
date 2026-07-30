@@ -9,7 +9,7 @@ from pathlib import Path
 from .benchmark import run_benchmark
 from .cache_cmd import run_cache
 from .batch import collect_prompts, dedupe_ints, normalize_steps_list, run_batch
-from .config import DEFAULT_STEPS, PREVIEW_STEPS, apply_env
+from .config import DEFAULT_IMG2IMG_STRENGTH, DEFAULT_STEPS, PREVIEW_STEPS, apply_env
 from .daemon import main as daemon_main
 from .generate import run_generate
 
@@ -21,6 +21,14 @@ def _add_gen_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--height", "-H", type=int, default=1024)
     p.add_argument("--seed", type=int)
     p.add_argument("--steps", type=int, default=None)
+    p.add_argument("--image", type=Path, metavar="PATH", help="init image for img2img")
+    p.add_argument(
+        "--strength",
+        type=float,
+        default=None,
+        metavar="S",
+        help=f"img2img denoise strength 0-1 (default {DEFAULT_IMG2IMG_STRENGTH})",
+    )
     p.add_argument("--output", "-o", type=Path)
 
 
@@ -47,6 +55,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"fast preview at {PREVIEW_STEPS} steps; same filenames as default (no -s{{N}} suffix)",
     )
     batch.add_argument("--precision", default=None)
+    batch.add_argument("--image", type=Path, metavar="PATH", help="shared init image for img2img batch")
+    batch.add_argument(
+        "--strength",
+        type=float,
+        default=None,
+        metavar="S",
+        help=f"img2img denoise strength 0-1 (default {DEFAULT_IMG2IMG_STRENGTH})",
+    )
     batch.add_argument("--no-base", action="store_true", help="skip base model images (default: include base)")
     batch.add_argument("--each", action="store_true")
     batch.add_argument("--combo", action="store_true")
@@ -88,6 +104,8 @@ def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
     apply_env()
 
     if args.command == "gen":
+        if args.strength is not None and args.image is None:
+            raise SystemExit("--strength requires --image")
         run_generate(
             args.prompt,
             loras=args.lora,
@@ -97,6 +115,8 @@ def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
             seed=args.seed,
             steps=args.steps,
             output=args.output,
+            image=args.image,
+            strength=args.strength,
         )
         _log_cli_total(started)
         return 0
@@ -122,6 +142,8 @@ def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
             reuse_steps=args.reuse_steps,
             override=args.override,
             dry_run=args.dry_run,
+            image=args.image,
+            strength=args.strength,
         )
         _log_cli_total(started)
         return 0

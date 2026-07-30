@@ -19,11 +19,15 @@ def batch_stem(
     height: int,
     seed: int,
     steps: int | None = None,
+    *,
+    strength: float | None = None,
 ) -> str:
     resolved = resolve_steps(steps)
     base = f"{slugify(prompt)}-{width}x{height}-{seed}"
     if resolved != resolve_steps(None):
         base += f"-s{resolved}"
+    if strength is not None:
+        base += f"-i{strength:g}"
     return base
 
 
@@ -33,8 +37,10 @@ def output_filename(
     height: int,
     seed: int,
     steps: int | None = None,
+    *,
+    strength: float | None = None,
 ) -> str:
-    return f"{batch_stem(prompt, width, height, seed, steps)}.png"
+    return f"{batch_stem(prompt, width, height, seed, steps, strength=strength)}.png"
 
 
 def batch_list_glob(prompt: str, width: int, height: int) -> str:

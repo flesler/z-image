@@ -3,7 +3,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from .config import PREVIEW_STEPS, apply_env, batch_dir, resolve_steps
+from .config import PREVIEW_STEPS, apply_env, batch_dir, resolve_steps, resolve_strength, validate_strength
+from .init_image import load_init_image
 from .loras import LoraSpec, apply_triggers, expand_lora_specs, normalize_prompt, random_seed, resolve_spec
 from .naming import batch_filename, batch_stem
 from .worker_client import ensure_worker, generate_batch_via_worker
@@ -89,6 +90,8 @@ def run_batch(
     preview: bool = False,
     override: bool = False,
     dry_run: bool = False,
+    image: Path | None = None,
+    strength: float | None = None,
 ) -> list[Path]:
     apply_env()
     prompts = [normalize_prompt(p) for p in prompts]
@@ -98,6 +101,18 @@ def run_batch(
         raise SystemExit("need --lora or drop --no-base")
     if repeat < 0:
         raise SystemExit("--repeat must be >= 0")
+    if strength is not None and image is None:
+        raise SystemExit("--strength requires --image")
+    img_strength = None
+    if image is not None:
+        if strength is not None:
+            validate_strength(strength)
+        img_strength = resolve_strength(strength)
+        if reuse_steps:
+            raise SystemExit("img2img batch does not support --reuse-steps")
+        if not dry_run:
+            load_init_image(image, width=width, height=height)
+        print(f"img2img: {image} strength={img_strength:g}", file=sys.stderr)
 
     default_steps = resolve_steps(None)
     if preview:
@@ -151,6 +166,8 @@ def run_batch(
             preview=preview,
             override=override,
             dry_run=dry_run,
+            image=image,
+            img_strength=img_strength,
         )
     )
 
@@ -201,6 +218,8 @@ def _run_one_batch(
     preview: bool,
     override: bool,
     dry_run: bool,
+    image: Path | None = None,
+    img_strength: float | None = None,
 ) -> list[Path]:
     outputs: list[Path] = []
     jobs: list[dict] = []
@@ -217,7 +236,7 @@ def _run_one_batch(
                 for step_count in steps_list:
                     final_prompt = apply_triggers(prompt, [str(spec) for spec in lora_specs])
                     name_steps = None if preview else step_count
-                    stem = batch_stem(prompt, width, height, iter_seed, name_steps)
+                    stem = batch_stem(prompt, width, height, iter_seed, name_steps, strength=img_strength)
                     output = root / batch_filename(stem, variant)
 
                     step_label = f" s{step_count}" if len(steps_list) > 1 else ""
@@ -262,6 +281,8 @@ def _run_one_batch(
         height=height,
         precision=precision,
         reuse_steps=reuse_steps,
+        image=image,
+        strength=img_strength,
         on_image=on_image,
     )
 

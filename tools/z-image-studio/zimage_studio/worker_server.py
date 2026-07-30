@@ -12,8 +12,9 @@ from pathlib import Path
 import zimage.engine as zengine
 from zimage.paths import get_loras_dir
 
-from .config import apply_env, default_precision, idle_unload_minutes, load_pipeline, resolve_precision, resolve_steps, worker_host, worker_port
+from .config import apply_env, default_precision, idle_unload_minutes, load_pipeline, resolve_precision, resolve_steps, resolve_strength, worker_host, worker_port
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
+from .init_image import load_init_image
 from .job_monitor import JobMonitor, log_summary
 from .loras import resolve_path
 from .pipeline_cache import IdleGuard, current_pipe
@@ -53,6 +54,11 @@ def run_generate_job(body: dict) -> dict:
     precision = resolve_precision(body.get("precision"))
     steps = resolve_steps(body.get("steps"))
     loras = resolve_loras(body.get("loras", []))
+    init_image = None
+    strength = None
+    if body.get("image"):
+        strength = resolve_strength(body.get("strength"))
+        init_image = load_init_image(body["image"], width=width, height=height)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     reset_vram_peak()
@@ -70,6 +76,8 @@ def run_generate_job(body: dict) -> dict:
             seed=seed,
             precision=precision,
             loras=loras or None,
+            init_image=init_image,
+            strength=strength,
         )
     finally:
         if monitor_ctx:
@@ -99,6 +107,11 @@ def run_generate_batch(body: dict, *, on_image=None) -> dict:
     width = int(body.get("width", 1024))
     height = int(body.get("height", 1024))
     precision = resolve_precision(body.get("precision"))
+    init_image = None
+    strength = None
+    if body.get("image"):
+        strength = resolve_strength(body.get("strength"))
+        init_image = load_init_image(body["image"], width=width, height=height)
 
     reset_vram_peak()
     reloaded = current_pipe() is None
@@ -119,6 +132,8 @@ def run_generate_batch(body: dict, *, on_image=None) -> dict:
             width=width,
             height=height,
             reuse_steps=body.get("reuse_steps", False),
+            init_image=init_image,
+            strength=strength,
             log=log,
             reloaded=reloaded,
             on_image=on_image,

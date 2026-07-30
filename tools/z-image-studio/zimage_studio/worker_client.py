@@ -54,6 +54,8 @@ def generate_via_worker(
     steps: int | None = None,
     precision: str | None = None,
     loras: list[LoraSpec],
+    image: Path | None = None,
+    strength: float | None = None,
 ) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     payload: dict = {
@@ -68,6 +70,10 @@ def generate_via_worker(
         payload["steps"] = steps
     if precision is not None:
         payload["precision"] = precision
+    if image is not None:
+        payload["image"] = str(image)
+        if strength is not None:
+            payload["strength"] = strength
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
         generate_url(),
@@ -87,6 +93,8 @@ def generate_batch_via_worker(
     height: int,
     precision: str | None,
     reuse_steps: bool = False,
+    image: Path | None = None,
+    strength: float | None = None,
     on_image=None,
 ) -> dict:
     payload: dict = {
@@ -98,6 +106,10 @@ def generate_batch_via_worker(
     }
     if precision is not None:
         payload["precision"] = precision
+    if image is not None:
+        payload["image"] = str(image)
+        if strength is not None:
+            payload["strength"] = strength
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
         generate_batch_url(),
