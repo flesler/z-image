@@ -35,7 +35,7 @@ def cmd_start() -> int:
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     proc = subprocess.Popen(
-        [str(python), "-m", "zimage_studio.worker_server", default_precision()],
+        [str(python), "-m", "z_image.worker_server", default_precision()],
         cwd=ROOT,
         stdout=log,
         stderr=subprocess.STDOUT,
@@ -93,7 +93,7 @@ def cmd_logs() -> int:
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     if not argv or argv[0] in ("-h", "--help"):
-        print("Usage: zimage_studio daemon {start|stop|restart|status|logs}")
+        print("Usage: z-image daemon {start|stop|restart|status|logs}")
         return 0 if not argv else 1
 
     cmd = argv[0]

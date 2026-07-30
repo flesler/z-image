@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 VENV_BIN = ROOT / ".venv" / "bin"
 LIB_DIR = ROOT / "lib"
-LORAS_JSON = Path(os.environ.get("ZIMAGE_LORAS_MAP", LIB_DIR / "loras.json"))
+LORAS_JSON = Path(os.environ.get("Z_IMAGE_LORAS_MAP", LIB_DIR / "loras.json"))
 PIDFILE = ROOT / ".worker.pid"
 # 225 max filename length, deducts suffix and much to spare
 SLUG_MAX = 150
@@ -36,7 +36,7 @@ def load_pipeline(*args, **kwargs):
 
 
 def verbose_enabled() -> bool:
-    return os.environ.get("ZIMAGE_VERBOSE", "0").lower() in ("1", "true", "yes")
+    return os.environ.get("Z_IMAGE_VERBOSE", "0").lower() in ("1", "true", "yes")
 
 
 def apply_env() -> None:
@@ -45,14 +45,14 @@ def apply_env() -> None:
     if root not in existing.split(os.pathsep):
         os.environ["PYTHONPATH"] = f"{root}{os.pathsep}{existing}" if existing else root
 
-    data_dir = Path(os.environ.get("Z_IMAGE_STUDIO_DATA_DIR", ROOT / "data"))
-    os.environ.setdefault("Z_IMAGE_STUDIO_DATA_DIR", str(data_dir))
-    os.environ.setdefault("Z_IMAGE_STUDIO_OUTPUT_DIR", str(data_dir / "outputs"))
+    data_dir = Path(os.environ.get("Z_IMAGE_DATA_DIR", ROOT / "data"))
+    os.environ.setdefault("Z_IMAGE_DATA_DIR", str(data_dir))
+    os.environ.setdefault("Z_IMAGE_DATA_OUTPUT_DIR", str(data_dir / "outputs"))
     hf_home = data_dir / "huggingface"
     os.environ.setdefault("HF_HOME", str(hf_home))
     os.environ.setdefault("TRANSFORMERS_CACHE", str(hf_home / "hub"))
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-    os.environ.setdefault("ZIMAGE_CPU_OFFLOAD", "0")
+    os.environ.setdefault("Z_IMAGE_CPU_OFFLOAD", "0")
     if VENV_BIN.is_dir():
         path = os.environ.get("PATH", "")
         venv_path = str(VENV_BIN)
@@ -61,7 +61,7 @@ def apply_env() -> None:
 
 
 def output_dir() -> Path:
-    return Path(os.environ.get("ZIMAGE_OUTPUT_DIR", "/tmp/z-image"))
+    return Path(os.environ.get("Z_IMAGE_OUTPUT_DIR", "/tmp/z-image"))
 
 
 def batch_dir() -> Path:
@@ -69,23 +69,23 @@ def batch_dir() -> Path:
 
 
 def loras_dir() -> Path:
-    return Path(os.environ.get("ZIMAGE_LORAS_DIR", ROOT / "data" / "loras"))
+    return Path(os.environ.get("Z_IMAGE_LORAS_DIR", ROOT / "data" / "loras"))
 
 
 def worker_host() -> str:
-    return os.environ.get("ZIMAGE_WORKER_HOST", "127.0.0.1")
+    return os.environ.get("Z_IMAGE_WORKER_HOST", "127.0.0.1")
 
 
 def worker_port() -> int:
-    return int(os.environ.get("ZIMAGE_WORKER_PORT", "18765"))
+    return int(os.environ.get("Z_IMAGE_WORKER_PORT", "18765"))
 
 
 def worker_log() -> Path:
-    return Path(os.environ.get("ZIMAGE_WORKER_LOG", "/tmp/z-image/worker.log"))
+    return Path(os.environ.get("Z_IMAGE_WORKER_LOG", "/tmp/z-image/worker.log"))
 
 
 def default_precision() -> str:
-    return os.environ.get("ZIMAGE_DEFAULT_PRECISION", "q4")
+    return os.environ.get("Z_IMAGE_DEFAULT_PRECISION", "q4")
 
 
 def resolve_steps(steps: int | None) -> int:
@@ -107,16 +107,16 @@ def validate_strength(strength: float) -> float:
 
 
 def cpu_offload_enabled() -> bool:
-    return os.environ.get("ZIMAGE_CPU_OFFLOAD", "0").lower() in ("1", "true", "yes")
+    return os.environ.get("Z_IMAGE_CPU_OFFLOAD", "0").lower() in ("1", "true", "yes")
 
 
 def gpu_monitor_enabled() -> bool:
-    return os.environ.get("ZIMAGE_GPU_MONITOR", "1").lower() in ("1", "true", "yes")
+    return os.environ.get("Z_IMAGE_GPU_MONITOR", "1").lower() in ("1", "true", "yes")
 
 
 def idle_unload_minutes() -> float:
-    return float(os.environ.get("ZIMAGE_IDLE_UNLOAD_MINUTES", "5"))
+    return float(os.environ.get("Z_IMAGE_IDLE_UNLOAD_MINUTES", "5"))
 
 
 def data_dir() -> Path:
-    return Path(os.environ.get("Z_IMAGE_STUDIO_DATA_DIR", ROOT / "data"))
+    return Path(os.environ.get("Z_IMAGE_DATA_DIR", ROOT / "data"))

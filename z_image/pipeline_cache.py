@@ -84,7 +84,7 @@ class IdleGuard:
 
     def start(self) -> None:
         if not self.enabled:
-            _log("idle unload disabled (ZIMAGE_IDLE_UNLOAD_MINUTES=0)")
+            _log("idle unload disabled (Z_IMAGE_IDLE_UNLOAD_MINUTES=0)")
             return
         self._thread = threading.Thread(target=self._loop, name="idle-guard", daemon=True)
         self._thread.start()

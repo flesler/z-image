@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
     started = t0 if t0 is not None else time.perf_counter()
     args = build_parser().parse_args(argv)
     if getattr(args, "verbose", False) or getattr(args, "dry_run", False):
-        os.environ["ZIMAGE_VERBOSE"] = "1"
+        os.environ["Z_IMAGE_VERBOSE"] = "1"
     apply_env()
 
     if args.command == "gen":

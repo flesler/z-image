@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""User-facing entry: venv re-exec + PYTHONPATH bootstrap. Commands live in zimage_studio.app."""
+"""User-facing entry: venv re-exec + PYTHONPATH bootstrap. Commands live in z_image.app (z-image)."""
 from __future__ import annotations
 
 import os
@@ -36,6 +36,6 @@ if __name__ == "__main__":
     _ensure_venv()
     _bootstrap()
     t0 = time.perf_counter()
-    from zimage_studio.app import main
+    from z_image.app import main
 
     raise SystemExit(main(t0=t0))

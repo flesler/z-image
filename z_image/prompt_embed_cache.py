@@ -17,11 +17,11 @@ from .loras import normalize_prompt
 
 
 def cache_enabled() -> bool:
-    return os.environ.get("ZIMAGE_PROMPT_EMBED_CACHE", "1").lower() in ("1", "true", "yes")
+    return os.environ.get("Z_IMAGE_PROMPT_EMBED_CACHE", "1").lower() in ("1", "true", "yes")
 
 
 def cache_root() -> Path:
-    path = Path(os.environ.get("ZIMAGE_PROMPT_EMBED_CACHE_DIR", data_dir() / "cache" / "prompt_embeds"))
+    path = Path(os.environ.get("Z_IMAGE_PROMPT_EMBED_CACHE_DIR", data_dir() / "cache" / "prompt_embeds"))
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -167,13 +167,13 @@ def prune(
     max_mb: int | None = None,
 ) -> dict[str, int]:
     max_age_days = max_age_days if max_age_days is not None else int(
-        os.environ.get("ZIMAGE_PROMPT_EMBED_CACHE_MAX_AGE_DAYS", "90")
+        os.environ.get("Z_IMAGE_PROMPT_EMBED_CACHE_MAX_AGE_DAYS", "90")
     )
     max_entries = max_entries if max_entries is not None else int(
-        os.environ.get("ZIMAGE_PROMPT_EMBED_CACHE_MAX_ENTRIES", "500")
+        os.environ.get("Z_IMAGE_PROMPT_EMBED_CACHE_MAX_ENTRIES", "500")
     )
     max_mb = max_mb if max_mb is not None else int(
-        os.environ.get("ZIMAGE_PROMPT_EMBED_CACHE_MAX_MB", "256")
+        os.environ.get("Z_IMAGE_PROMPT_EMBED_CACHE_MAX_MB", "256")
     )
 
     remove_legacy_layout()

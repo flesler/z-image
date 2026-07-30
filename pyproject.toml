@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 
 [project.scripts]
-zimg = "zimage_studio.__main__:main"
+zimg = "z_image.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["zimage_studio*"]
+include = ["z_image*"]

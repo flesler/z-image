@@ -45,7 +45,7 @@ def log(msg: str) -> None:
 
 
 def job_monitor_enabled() -> bool:
-    return os.environ.get("ZIMAGE_JOB_MONITOR", "1").lower() in ("1", "true", "yes")
+    return os.environ.get("Z_IMAGE_JOB_MONITOR", "1").lower() in ("1", "true", "yes")
 
 
 def resolve_loras(entries: list[dict]) -> list[tuple[str, float]]:

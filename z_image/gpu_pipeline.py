@@ -17,7 +17,7 @@ _installed = False
 
 
 def vae_tiling_enabled() -> bool:
-    return os.environ.get("ZIMAGE_VAE_TILING", "0").lower() in ("1", "true", "yes")
+    return os.environ.get("Z_IMAGE_VAE_TILING", "0").lower() in ("1", "true", "yes")
 
 
 def _patch_pipeline_class(
@@ -25,7 +25,7 @@ def _patch_pipeline_class(
     *,
     patch_prepare_latents: bool,
 ) -> None:
-    if getattr(cls, "_zimage_studio_gpu_patched", False):
+    if getattr(cls, "_zimage_gpu_patched", False):
         return
 
     original_call = cls.__call__
@@ -69,7 +69,7 @@ def _patch_pipeline_class(
             return original_prepare_latents(self, *args, **kwargs)
 
         cls.prepare_latents = prepare_latents
-    cls._zimage_studio_gpu_patched = True
+    cls._zimage_gpu_patched = True
 
 
 def _patch_pipeline() -> None:
@@ -90,7 +90,7 @@ def install(*, log: Callable[[str], None] | None = None) -> None:
 
     if cpu_offload_enabled():
         if verbose_enabled():
-            emit("[gpu] accelerate CPU offload (ZIMAGE_CPU_OFFLOAD=1)")
+            emit("[gpu] accelerate CPU offload (Z_IMAGE_CPU_OFFLOAD=1)")
         _installed = True
         return
 
