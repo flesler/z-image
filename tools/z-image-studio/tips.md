@@ -14,14 +14,14 @@ Helpful phrases:
 
 Describe the specific action involving the hands (e.g., “gently holding a glass orb with both hands, fingers carefully curled around it”) rather than just hoping for good hands. Photographic language helps realism: “shot on 85mm lens, soft natural window light, shallow depth of field, film grain.” The base model is already relatively strong on faces (especially East Asian) and better than older models on many poses, but explicit description + good seed still helps a lot.
 
-# LoRA A/B compare
+# LoRA batch
 
 ```bash
 ZIMG=tools/z-image-studio/cli.py
 
 $ZIMG daemon start
 $ZIMG gen "prompt" --lora DarkGhibliZ
-$ZIMG compare "prompt" --lora DarkGhibliZ
+$ZIMG batch "prompt" --lora DarkGhibliZ
 $ZIMG benchmark
 ```
 
@@ -31,7 +31,7 @@ Omit `--seed` for a random seed (printed to stderr). Pass `--seed N` to reproduc
 Use `--repeat N` to run N variants; each repeat gets a new seed (random, or `N..N+repeat-1` when `--seed` is set). Base and all LoRAs share the seed within each repeat.
 
 ```bash
-$ZIMG compare "your prompt here" \
+$ZIMG batch "your prompt here" \
   --lora RealisticSnapshot-Zimage-Turbov5 \
   --repeat 5 --each
 ```
@@ -42,10 +42,10 @@ Omit `:strength` to use `default_strength` from `lib/loras.json`. Batch all cata
 $ZIMG benchmark
 ```
 
-Outputs land flat in `/tmp/z-image/compare/` — sort by filename to group variants for the same prompt/seed:
+Outputs land flat in `/tmp/z-image/batch/` — sort by filename to group variants for the same prompt/seed:
 
 ```
-/tmp/z-image/compare/
+/tmp/z-image/batch/
   <prompt-slug>-1024x1024-s77-base.png
   <prompt-slug>-1024x1024-s77-DarkGhibliZ.png
   <prompt-slug>-1024x1024-s77-ZiTMythG0thicL1nes.png
@@ -56,7 +56,7 @@ Same stem, different suffix — scales to A/B/C/D without per-LoRA folders.
 Existing outputs are skipped by default; pass `--override` to regenerate. Augment a set with one more LoRA:
 
 ```bash
-$ZIMG compare "same prompt" \
+$ZIMG batch "same prompt" \
   --lora ZiTMythG0thicL1nes \
   --lora ZiTMythR3alisticF \
   --lora Purple_grainy_zit \
@@ -67,7 +67,7 @@ Only `Purple_grainy_zit` is generated if base and the other two already exist.
 
 Flags: `--each` (per-LoRA files), `--combo` (all LoRAs stacked, when 2+). Default runs both when multiple LoRAs are passed.
 
-Trigger words for known LoRAs are prepended automatically from `lib/loras.json` when `--lora` is used (base/compare control image is unchanged).
+Trigger words for known LoRAs are prepended automatically from `lib/loras.json` when `--lora` is used (base/batch control image is unchanged).
 
 Single image with LoRA: `$ZIMG gen "prompt" --lora DarkGhibliZ`
 

@@ -146,6 +146,6 @@ def benchmark_plan(
         if not prompts:
             continue
         for prompt in prompts:
-            rows.append((file, normalize_prompt(prompt), seed_base + idx * repeat))
+            rows.append((file, normalize_prompt(prompt), seed_base + idx * (repeat + 1)))
             idx += 1
     return rows

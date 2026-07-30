@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-from .compare import run_compare
+from .batch import run_batch
 from .config import LORAS_JSON, apply_env
 from .loras import benchmark_plan, load_catalog
 
@@ -25,7 +25,7 @@ def run_benchmark(
 
     for lora_file, prompt, seed in plan:
         print(f"=== {lora_file} (s{seed}) ===", file=sys.stderr)
-        run_compare(
+        run_batch(
             [prompt],
             loras=[lora_file],
             seeds=[seed],

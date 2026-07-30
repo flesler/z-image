@@ -3,9 +3,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from .config import PREVIEW_STEPS, apply_env, compare_dir, resolve_steps
+from .config import PREVIEW_STEPS, apply_env, batch_dir, resolve_steps
 from .loras import LoraSpec, apply_triggers, expand_lora_specs, normalize_prompt, random_seed, resolve_spec
-from .naming import compare_filename, compare_stem
+from .naming import batch_filename, batch_stem
 from .worker_client import ensure_worker, generate_batch_via_worker
 
 
@@ -58,17 +58,18 @@ def normalize_steps_list(values: list[int] | None) -> list[int] | None:
 
 
 def expand_seed_runs(seeds: list[int] | None, repeat: int, *, seed_set: bool) -> list[int]:
-    if repeat < 1:
-        raise SystemExit("--repeat must be >= 1")
+    if repeat < 0:
+        raise SystemExit("--repeat must be >= 0")
+    count = repeat + 1
     if seed_set:
         if not seeds:
             raise SystemExit("need at least one --seed value")
-        return [s + i for s in seeds for i in range(repeat)]
+        return [s + i for s in seeds for i in range(count)]
     base = random_seed()
-    return [base + i for i in range(repeat)]
+    return [base + i for i in range(count)]
 
 
-def run_compare(
+def run_batch(
     prompts: list[str],
     *,
     loras: list[str],
@@ -93,8 +94,8 @@ def run_compare(
         raise SystemExit("need at least one --prompt")
     if not loras and not include_base:
         raise SystemExit("need --lora or drop --no-base")
-    if repeat < 1:
-        raise SystemExit("--repeat must be >= 1")
+    if repeat < 0:
+        raise SystemExit("--repeat must be >= 0")
 
     default_steps = resolve_steps(None)
     if preview:
@@ -115,7 +116,7 @@ def run_compare(
         each = True
         combo = len(resolved) > 1
 
-    root = compare_dir()
+    root = batch_dir()
     root.mkdir(parents=True, exist_ok=True)
 
     if not dry_run:
@@ -132,7 +133,7 @@ def run_compare(
 
     outputs: list[Path] = []
     outputs.extend(
-        _run_one_compare(
+        _run_one_batch(
             prompts=prompts,
             resolved=resolved,
             seed_runs=seed_runs,
@@ -181,7 +182,7 @@ def _model_variants(
     return models
 
 
-def _run_one_compare(
+def _run_one_batch(
     *,
     prompts: list[str],
     resolved: list[LoraSpec],
@@ -214,8 +215,8 @@ def _run_one_compare(
                 for step_count in steps_list:
                     final_prompt = apply_triggers(prompt, [str(spec) for spec in lora_specs])
                     name_steps = None if preview else step_count
-                    stem = compare_stem(prompt, width, height, iter_seed, name_steps)
-                    output = root / compare_filename(stem, variant)
+                    stem = batch_stem(prompt, width, height, iter_seed, name_steps)
+                    output = root / batch_filename(stem, variant)
 
                     step_label = f" s{step_count}" if len(steps_list) > 1 else ""
                     if not override and output.is_file():

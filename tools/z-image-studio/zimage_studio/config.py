@@ -63,8 +63,8 @@ def output_dir() -> Path:
     return Path(os.environ.get("ZIMAGE_OUTPUT_DIR", "/tmp/z-image"))
 
 
-def compare_dir() -> Path:
-    return output_dir() / "compare"
+def batch_dir() -> Path:
+    return output_dir() / "batch"
 
 
 def loras_dir() -> Path:

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .benchmark import run_benchmark
 from .cache_cmd import run_cache
-from .compare import collect_prompts, dedupe_ints, normalize_steps_list, run_compare
+from .batch import collect_prompts, dedupe_ints, normalize_steps_list, run_batch
 from .config import DEFAULT_STEPS, PREVIEW_STEPS, apply_env
 from .daemon import main as daemon_main
 from .generate import run_generate
@@ -32,34 +32,34 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("prompt")
     _add_gen_flags(gen)
 
-    compare = sub.add_parser("compare", help="A/B compare base vs LoRA(s)")
-    compare.add_argument("--prompt", action="append", default=None, metavar="TEXT", help="repeatable")
-    compare.add_argument("--prompt-file", action="append", default=[], type=Path, metavar="FILE", help="one prompt per line; skips empty and duplicates")
-    compare.add_argument("--lora", action="append", default=None, metavar="NAME[:STRENGTH]|*", help="repeatable; omit for base-only; use '*' for all catalog LoRAs")
-    compare.add_argument("--seed", action="append", type=int, default=None, metavar="N", help="repeatable base seed; with --repeat N uses N..N+repeat-1 per value")
-    compare.add_argument("--repeat", type=int, default=1, help="seed count from base: base, base+1, … (random base if --seed omitted)")
-    compare.add_argument("--width", "-w", type=int, default=1024)
-    compare.add_argument("--height", "-H", type=int, default=1024)
-    compare.add_argument("--steps", action="append", type=int, default=None, metavar="N", help=f"repeatable inference steps; default {DEFAULT_STEPS}")
-    compare.add_argument(
+    batch = sub.add_parser("batch", help="batch generate prompts across base and LoRA(s)")
+    batch.add_argument("--prompt", action="append", default=None, metavar="TEXT", help="repeatable")
+    batch.add_argument("--prompt-file", action="append", default=[], type=Path, metavar="FILE", help="one prompt per line; skips empty and duplicates")
+    batch.add_argument("--lora", action="append", default=None, metavar="NAME[:STRENGTH]|*", help="repeatable; omit for base-only; use '*' for all catalog LoRAs")
+    batch.add_argument("--seed", action="append", type=int, default=None, metavar="N", help="repeatable base seed; with --repeat N uses N+1 seeds: base..base+N")
+    batch.add_argument("--repeat", type=int, default=1, help="extra seeds after base: --repeat 1 → 2 seeds, --repeat 3 → 4 seeds")
+    batch.add_argument("--width", "-w", type=int, default=1024)
+    batch.add_argument("--height", "-H", type=int, default=1024)
+    batch.add_argument("--steps", action="append", type=int, default=None, metavar="N", help=f"repeatable inference steps; default {DEFAULT_STEPS}")
+    batch.add_argument(
         "--preview",
         action="store_true",
         help=f"fast preview at {PREVIEW_STEPS} steps; same filenames as default (no -s{{N}} suffix)",
     )
-    compare.add_argument("--precision", default=None)
-    compare.add_argument("--no-base", action="store_true", help="skip base model images (default: include base)")
-    compare.add_argument("--each", action="store_true")
-    compare.add_argument("--combo", action="store_true")
-    compare.add_argument(
+    batch.add_argument("--precision", default=None)
+    batch.add_argument("--no-base", action="store_true", help="skip base model images (default: include base)")
+    batch.add_argument("--each", action="store_true")
+    batch.add_argument("--combo", action="store_true")
+    batch.add_argument(
         "--reuse-steps",
         action="store_true",
         help="merge same prompt/seed/model runs: one denoise at max steps, partial x0 snapshots (faster, lower quality)",
     )
-    compare.add_argument("--override", action="store_true")
-    compare.add_argument("--dry-run", action="store_true", help="print planned outputs only, do not generate")
-    compare.add_argument("--verbose", action="store_true", help="extra diagnostics (implied by --dry-run)")
+    batch.add_argument("--override", action="store_true")
+    batch.add_argument("--dry-run", action="store_true", help="print planned outputs only, do not generate")
+    batch.add_argument("--verbose", action="store_true", help="extra diagnostics (implied by --dry-run)")
 
-    bench = sub.add_parser("benchmark", help="run catalog LoRA compares")
+    bench = sub.add_parser("benchmark", help="run catalog LoRA batches")
     bench.add_argument("--lora", action="append", default=[], metavar="NAME[:STRENGTH]")
     bench.add_argument("--seed-base", type=int, default=401)
     bench.add_argument("--repeat", type=int, default=1)
@@ -101,11 +101,11 @@ def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
         _log_cli_total(started)
         return 0
 
-    if args.command == "compare":
+    if args.command == "batch":
         if args.preview and args.steps:
             raise SystemExit("--preview and --steps are mutually exclusive")
         seeds = dedupe_ints(args.seed)
-        run_compare(
+        run_batch(
             collect_prompts(inline=args.prompt, files=args.prompt_file),
             loras=args.lora or [],
             seeds=seeds,

@@ -13,7 +13,7 @@ def slugify(text: str, max_len: int = SLUG_MAX) -> str:
     return slug[:max_len]
 
 
-def compare_stem(
+def batch_stem(
     prompt: str,
     width: int,
     height: int,
@@ -34,13 +34,13 @@ def output_filename(
     seed: int,
     steps: int | None = None,
 ) -> str:
-    return f"{compare_stem(prompt, width, height, seed, steps)}.png"
+    return f"{batch_stem(prompt, width, height, seed, steps)}.png"
 
 
-def compare_list_glob(prompt: str, width: int, height: int) -> str:
+def batch_list_glob(prompt: str, width: int, height: int) -> str:
     """Glob pattern to list all variants for a prompt/size (seed wildcard)."""
     return f"{slugify(prompt)}-{width}x{height}-*"
 
 
-def compare_filename(stem: str, variant: str) -> str:
+def batch_filename(stem: str, variant: str) -> str:
     return f"{stem}-{variant}.png"
