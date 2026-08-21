@@ -88,7 +88,7 @@ class IdleGuard:
             return
         self._thread = threading.Thread(target=self._loop, name="idle-guard", daemon=True)
         self._thread.start()
-        _log(f"idle unload after {self.timeout_s / 60:.0f} min with no generation jobs")
+        _log(f"idle unload after {self.timeout_s / 60:.0f} min with no jobs")
 
     def stop(self) -> None:
         self._stop.set()
@@ -102,7 +102,21 @@ class IdleGuard:
                 if self._busy > 0:
                     continue
                 idle_s = time.monotonic() - self._last_activity
-            if idle_s < self.timeout_s or current_pipe() is None:
+            if idle_s < self.timeout_s:
                 continue
-            if unload_pipeline():
-                _log(f"unloaded pipeline after {idle_s / 60:.1f} min idle")
+            had_pipe = current_pipe() is not None
+            from .caption import caption_model_loaded, unload_caption_model
+
+            had_caption = caption_model_loaded()
+            if not had_pipe and not had_caption:
+                continue
+            if had_pipe:
+                unload_pipeline()
+            if had_caption:
+                unload_caption_model()
+            parts = []
+            if had_pipe:
+                parts.append("pipeline")
+            if had_caption:
+                parts.append("caption model")
+            _log(f"unloaded {' and '.join(parts)} after {idle_s / 60:.1f} min idle")

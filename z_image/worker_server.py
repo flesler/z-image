@@ -24,6 +24,7 @@ from .config import (
     worker_host,
     worker_port,
 )
+from .caption import caption_image, caption_model_device, unload_caption_model
 from .exceptions import ClientDisconnected
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
 from .init_image import load_init_image
@@ -59,6 +60,29 @@ def resolve_loras(entries: list[dict]) -> list[tuple[str, float]]:
     return resolved
 
 
+def _release_caption_gpu() -> None:
+    if caption_model_device() == "cuda":
+        unload_caption_model()
+
+
+def run_caption_job(body: dict) -> dict:
+    image = Path(body["image"])
+    device = body.get("device", "auto")
+    if not image.is_file():
+        raise FileNotFoundError(f"image not found: {image}")
+
+    t0 = time.perf_counter()
+    pipeline_loaded = current_pipe() is not None
+    caption = caption_image(image, device=device, pipeline_loaded=pipeline_loaded)
+    elapsed = time.perf_counter() - t0
+    log(f"caption in {elapsed:.1f}s ({caption_model_device()}) → {image.name}")
+    return {
+        "caption": caption,
+        "device": caption_model_device(),
+        "elapsed_s": round(elapsed, 2),
+    }
+
+
 def run_generate_job(body: dict) -> dict:
     prompt = body["prompt"]
     output = Path(body["output"])
@@ -75,6 +99,7 @@ def run_generate_job(body: dict) -> dict:
         init_image = load_init_image(body["image"], width=width, height=height)
 
     output.parent.mkdir(parents=True, exist_ok=True)
+    _release_caption_gpu()
     reset_vram_peak()
     log_pipe(current_pipe(), label="pre-gen")
     monitor_ctx = JobMonitor() if job_monitor_enabled() else None
@@ -144,6 +169,7 @@ def run_generate_batch(body: dict, *, on_image=None) -> dict:
         init_image = load_init_image(body["image"], width=width, height=height)
 
     reset_vram_peak()
+    _release_caption_gpu()
     reloaded = current_pipe() is None
     pipe = load_pipeline(precision=precision)
     monitor_ctx = JobMonitor() if job_monitor_enabled() else None
@@ -205,6 +231,8 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "status": "ok",
                     "model_loaded": current_pipe() is not None,
+                    "caption_loaded": caption_model_device() is not None,
+                    "caption_device": caption_model_device(),
                     "idle_unload_min": idle_unload_minutes(),
                     "idle_s": round(_idle_guard.idle_seconds(), 1),
                     "gpu": snapshot(current_pipe()),
@@ -219,6 +247,9 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             with _idle_guard.job():
+                if self.path == "/caption":
+                    self._json(200, run_caption_job(body))
+                    return
                 if self.path == "/generate":
                     self._json(200, run_generate_job(body))
                     return

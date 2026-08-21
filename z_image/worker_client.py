@@ -15,6 +15,10 @@ def health_url() -> str:
     return f"http://{worker_host()}:{worker_port()}/health"
 
 
+def caption_url() -> str:
+    return f"http://{worker_host()}:{worker_port()}/caption"
+
+
 def generate_url() -> str:
     return f"http://{worker_host()}:{worker_port()}/generate"
 
@@ -42,6 +46,22 @@ def ensure_worker() -> None:
         cwd=ROOT,
         check=True,
     )
+
+
+def caption_via_worker(path: Path | str, *, device: str = "auto") -> str:
+    payload = {"image": str(Path(path).expanduser().resolve()), "device": device}
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        caption_url(),
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=600) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"worker returned {resp.status}")
+        body = json.loads(resp.read())
+        return body["caption"]
 
 
 def generate_via_worker(
