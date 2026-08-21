@@ -11,6 +11,8 @@ from typing import Literal
 from PIL import Image
 
 from .config import apply_env
+from .metadata import embed_prompt as write_prompt_metadata
+from .metadata import read_prompt as read_prompt_metadata
 
 DEFAULT_MODEL = "Salesforce/blip-image-captioning-large"
 DEFAULT_PROMPT = "a detailed photograph showing"
@@ -189,10 +191,54 @@ def caption_image(
     return text
 
 
-def run_caption(path: str | Path, *, device: CaptionDevicePref | str = "auto") -> str:
-    """Extract prompt via the warm worker (model stays loaded until idle timeout)."""
+def _caption_via_model(path: str | Path, *, device: CaptionDevicePref | str) -> str:
     from .worker_client import caption_via_worker, ensure_worker
 
-    apply_env()
     ensure_worker()
     return caption_via_worker(path, device=device)
+
+
+def run_caption(
+    path: str | Path,
+    *,
+    device: CaptionDevicePref | str = "auto",
+    force_caption: bool = False,
+    embed_prompt: bool = False,
+) -> str:
+    """Extract prompt via metadata or the warm worker."""
+    apply_env()
+    resolved = Path(path).expanduser().resolve()
+
+    if not force_caption:
+        cached = read_prompt_metadata(resolved)
+        if cached:
+            print("caption: from metadata", file=sys.stderr)
+            if embed_prompt:
+                write_prompt_metadata(resolved, cached)
+            return cached
+
+    prompt = _caption_via_model(resolved, device=device)
+    if embed_prompt:
+        write_prompt_metadata(resolved, prompt)
+    return prompt
+
+
+def run_captions(
+    paths: list[str | Path],
+    *,
+    device: CaptionDevicePref | str = "auto",
+    force_caption: bool = False,
+    embed_prompt: bool = False,
+) -> None:
+    for i, path in enumerate(paths):
+        prompt = run_caption(
+            path,
+            device=device,
+            force_caption=force_caption,
+            embed_prompt=embed_prompt,
+        )
+        if i:
+            print()
+        print(path)
+        print()
+        print(prompt)

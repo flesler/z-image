@@ -24,13 +24,20 @@ def run_from_image(
     output: Path | None = None,
     caption_only: bool = False,
     caption_device: str = "auto",
+    force_caption: bool = False,
+    embed_prompt: bool = False,
 ) -> str:
     apply_env()
     img_w, img_h = image_dimensions(image)
     gen_w = width if width is not None else img_w
     gen_h = height if height is not None else img_h
 
-    prompt = run_caption(image, device=caption_device)
+    prompt = run_caption(
+        image,
+        device=caption_device,
+        force_caption=force_caption,
+        embed_prompt=embed_prompt,
+    )
     print(f"caption: {prompt}", file=sys.stderr)
     print(f"size: {gen_w}x{gen_h} (source {img_w}x{img_h})", file=sys.stderr)
 
