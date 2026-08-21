@@ -27,3 +27,5 @@ Reverse-caption an image (BLIP-large, warm in the worker like generation):
 ```
 
 `--caption-device auto|cpu|gpu` (default `auto`): GPU when enough free VRAM; CPU when the gen pipeline is loaded. First caption after idle loads the model (~10s); repeat calls are fast until `Z_IMAGE_IDLE_UNLOAD_MINUTES` evicts it.
+
+Own outputs already carry the prompt in PNG metadata (instant). `--force-caption` skips that and runs BLIP. `--embed-prompt` writes the caption into the source image.

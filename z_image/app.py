@@ -10,7 +10,7 @@ from .benchmark import run_benchmark
 from .cache_cmd import run_cache
 from .batch import collect_prompts, dedupe_ints, normalize_steps_list, run_batch
 from .config import DEFAULT_IMG2IMG_STRENGTH, DEFAULT_STEPS, PREVIEW_STEPS, apply_env
-from .caption import run_caption
+from .caption import run_caption, run_captions
 from .daemon import main as daemon_main
 from .from_image import run_from_image
 from .generate import run_generate
@@ -49,6 +49,20 @@ def _add_caption_device_flag(p: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_caption_flags(p: argparse.ArgumentParser) -> None:
+    _add_caption_device_flag(p)
+    p.add_argument(
+        "--force-caption",
+        action="store_true",
+        help="run BLIP even when PNG parameters already contain a prompt",
+    )
+    p.add_argument(
+        "--embed-prompt",
+        action="store_true",
+        help="write extracted prompt into the source image PNG parameters",
+    )
+
+
 def _add_gen_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--lora", action="append", default=[], metavar="NAME[:STRENGTH]")
     p.add_argument("--precision", default=None)
@@ -74,9 +88,9 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("prompt")
     _add_gen_flags(gen)
 
-    caption = sub.add_parser("caption", help="reverse-caption an image to stdout")
-    caption.add_argument("image", type=Path)
-    _add_caption_device_flag(caption)
+    caption = sub.add_parser("caption", help="reverse-caption image(s) to stdout")
+    caption.add_argument("image", type=Path, nargs="+")
+    _add_caption_flags(caption)
 
     from_img = sub.add_parser(
         "from-image",
@@ -95,7 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
     from_img.add_argument("--repeat", type=int, default=1, help="variant count when no --seed")
     from_img.add_argument("--steps", type=int, default=None)
     from_img.add_argument("--output", "-o", type=Path)
-    _add_caption_device_flag(from_img)
+    _add_caption_flags(from_img)
 
     batch = sub.add_parser("batch", help="batch generate prompts across base and LoRA(s)")
     batch.add_argument("--prompt", action="append", default=None, metavar="TEXT", help="repeatable")
@@ -185,7 +199,22 @@ def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
         return 0
 
     if args.command == "caption":
-        print(run_caption(args.image, device=args.caption_device))
+        if len(args.image) == 1:
+            print(
+                run_caption(
+                    args.image[0],
+                    device=args.caption_device,
+                    force_caption=args.force_caption,
+                    embed_prompt=args.embed_prompt,
+                )
+            )
+        else:
+            run_captions(
+                args.image,
+                device=args.caption_device,
+                force_caption=args.force_caption,
+                embed_prompt=args.embed_prompt,
+            )
         _log_cli_total(started)
         return 0
 
@@ -207,6 +236,8 @@ def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
             output=args.output,
             caption_only=args.caption_only,
             caption_device=args.caption_device,
+            force_caption=args.force_caption,
+            embed_prompt=args.embed_prompt,
         )
         _log_cli_total(started)
         return 0
