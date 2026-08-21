@@ -10,7 +10,9 @@ from .benchmark import run_benchmark
 from .cache_cmd import run_cache
 from .batch import collect_prompts, dedupe_ints, normalize_steps_list, run_batch
 from .config import DEFAULT_IMG2IMG_STRENGTH, DEFAULT_STEPS, PREVIEW_STEPS, apply_env
+from .caption import run_caption
 from .daemon import main as daemon_main
+from .from_image import run_from_image
 from .generate import run_generate
 from .sizes import ASPECT_BASE_CHOICES, resolve_dimensions, size_choices
 
@@ -38,6 +40,15 @@ def _add_size_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--height", "-H", type=int, default=None)
 
 
+def _add_caption_device_flag(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--caption-device",
+        choices=["auto", "cpu", "gpu"],
+        default="auto",
+        help="reverse-caption device: auto picks GPU when enough free VRAM, else CPU",
+    )
+
+
 def _add_gen_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--lora", action="append", default=[], metavar="NAME[:STRENGTH]")
     p.add_argument("--precision", default=None)
@@ -62,6 +73,29 @@ def build_parser() -> argparse.ArgumentParser:
     gen = sub.add_parser("gen", help="generate a single image")
     gen.add_argument("prompt")
     _add_gen_flags(gen)
+
+    caption = sub.add_parser("caption", help="reverse-caption an image to stdout")
+    caption.add_argument("image", type=Path)
+    _add_caption_device_flag(caption)
+
+    from_img = sub.add_parser(
+        "from-image",
+        help="caption an image and generate variant(s) at the source resolution",
+    )
+    from_img.add_argument("image", type=Path, help="source image to reverse-caption")
+    from_img.add_argument(
+        "--caption-only",
+        action="store_true",
+        help="print extracted prompt only; do not generate",
+    )
+    from_img.add_argument("--lora", action="append", default=[], metavar="NAME[:STRENGTH]")
+    from_img.add_argument("--precision", default=None)
+    _add_size_flags(from_img)
+    from_img.add_argument("--seed", action="append", type=int, default=None, metavar="N")
+    from_img.add_argument("--repeat", type=int, default=1, help="variant count when no --seed")
+    from_img.add_argument("--steps", type=int, default=None)
+    from_img.add_argument("--output", "-o", type=Path)
+    _add_caption_device_flag(from_img)
 
     batch = sub.add_parser("batch", help="batch generate prompts across base and LoRA(s)")
     batch.add_argument("--prompt", action="append", default=None, metavar="TEXT", help="repeatable")
@@ -146,6 +180,33 @@ def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:
             output=args.output,
             image=args.image,
             strength=args.strength,
+        )
+        _log_cli_total(started)
+        return 0
+
+    if args.command == "caption":
+        print(run_caption(args.image, device=args.caption_device))
+        _log_cli_total(started)
+        return 0
+
+    if args.command == "from-image":
+        if args.size or args.aspect_ratio:
+            raise SystemExit("--size and --aspect-ratio are ignored; use --width/--height or source image size")
+        if (args.width is None) != (args.height is None):
+            raise SystemExit("provide both --width and --height, or omit both to use source image size")
+        run_from_image(
+            args.image,
+            loras=args.lora,
+            precision=args.precision,
+            width=args.width,
+            height=args.height,
+            seed=args.seed[0] if args.seed and len(args.seed) == 1 and args.repeat == 1 else None,
+            seeds=args.seed,
+            repeat=args.repeat,
+            steps=args.steps,
+            output=args.output,
+            caption_only=args.caption_only,
+            caption_device=args.caption_device,
         )
         _log_cli_total(started)
         return 0
