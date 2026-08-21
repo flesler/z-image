@@ -9,6 +9,7 @@ from PIL.PngImagePlugin import PngInfo
 
 MODEL_NAME = "Z-Image-Turbo"
 SAMPLER = "Flow Match"
+NEGATIVE_PROMPT_MARKER = "Negative prompt:"
 
 
 @dataclass(frozen=True)
@@ -53,4 +54,36 @@ def save_image(image: Image.Image, path: Path | str, meta: GenMeta) -> None:
     resolved.parent.mkdir(parents=True, exist_ok=True)
     pnginfo = PngInfo()
     pnginfo.add_text("parameters", build_parameters(meta))
+    image.save(resolved, pnginfo=pnginfo)
+
+
+def read_prompt(path: Path | str) -> str | None:
+    """Positive prompt from PNG parameters chunk, or None."""
+    resolved = Path(path).expanduser().resolve()
+    with Image.open(resolved) as im:
+        raw = (im.text or {}).get("parameters")
+    if not raw:
+        return None
+    if NEGATIVE_PROMPT_MARKER in raw:
+        prompt = raw.split(NEGATIVE_PROMPT_MARKER, 1)[0]
+    else:
+        prompt = raw.split("\n", 1)[0]
+    prompt = prompt.strip()
+    return prompt or None
+
+
+def embed_prompt(path: Path | str, prompt: str) -> None:
+    """Write prompt into PNG parameters (mutates file)."""
+    resolved = Path(path).expanduser().resolve()
+    with Image.open(resolved) as im:
+        image = im.convert("RGB")
+        extra = {k: v for k, v in (im.text or {}).items() if k != "parameters"}
+    width, height = image.size
+    pnginfo = PngInfo()
+    for key, value in extra.items():
+        pnginfo.add_text(key, value)
+    pnginfo.add_text(
+        "parameters",
+        build_parameters(GenMeta(prompt=prompt, width=width, height=height, seed=0, steps=0)),
+    )
     image.save(resolved, pnginfo=pnginfo)
