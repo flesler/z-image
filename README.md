@@ -16,3 +16,14 @@ source .env.sh
 ```
 
 See [tips.md](tips.md) for model guidance and batch workflows. See [docs/randomness.md](docs/randomness.md) for seed diversity options.
+
+## Caption / from-image
+
+Reverse-caption an image (BLIP-large, warm in the worker like generation):
+
+```bash
+./cli.py caption path/to/image.png
+./cli.py from-image path/to/image.png --repeat 3
+```
+
+`--caption-device auto|cpu|gpu` (default `auto`): GPU when enough free VRAM; CPU when the gen pipeline is loaded. First caption after idle loads the model (~10s); repeat calls are fast until `Z_IMAGE_IDLE_UNLOAD_MINUTES` evicts it.

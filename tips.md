@@ -71,3 +71,17 @@ Trigger words for known LoRAs are prepended automatically from `lib/loras.json` 
 
 Single image with LoRA: `$ZIMG gen "prompt" --lora DarkGhibliZ`
 
+# Reverse caption
+
+Extract a natural-language prompt from an image, or generate variants without writing a prompt:
+
+```bash
+$ZIMG caption photo.png
+$ZIMG from-image photo.png --repeat 3
+$ZIMG from-image photo.png --caption-only   # print prompt only
+```
+
+Uses BLIP-large in the warm worker (`daemon start`). `--caption-device auto` (default) picks CPU when the gen model is on GPU; otherwise GPU fp16 when VRAM allows. Caption model unloads on idle timeout (`Z_IMAGE_IDLE_UNLOAD_MINUTES`, same as generation).
+
+Benchmark helpers (optional): `scripts/caption_eval.py`, `scripts/caption_benchmark.py`.
+
