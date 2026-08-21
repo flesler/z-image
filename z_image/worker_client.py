@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .config import VENV_BIN, ROOT, apply_env, worker_host, worker_port
 from .loras import LoraSpec, resolve_path
+from .metadata import GenMeta, save_image
 
 
 def health_url() -> str:
@@ -165,4 +166,16 @@ def generate_cold(
         precision=precision,
         loras=lora_paths or None,
     )
-    image.save(output)
+    save_image(
+        image,
+        output,
+        GenMeta(
+            prompt=prompt,
+            width=width,
+            height=height,
+            seed=seed,
+            steps=steps,
+            precision=precision,
+            loras=lora_paths or None,
+        ),
+    )

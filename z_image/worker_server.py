@@ -30,6 +30,7 @@ from .init_image import load_init_image
 from .job_monitor import JobMonitor, log_summary
 from .loras import resolve_path
 from .pipeline_cache import IdleGuard, current_pipe
+from .metadata import GenMeta, save_image
 from .pipeline_jobs import generate_one, recover_pipe, run_batch_on_pipe
 from .prompt_embed_cache import prune, remove_legacy_layout
 from .text_encoder import release_text_encoder
@@ -99,7 +100,20 @@ def run_generate_job(body: dict) -> dict:
         if monitor_ctx:
             monitor_ctx.__exit__(None, None, None)
     elapsed = time.perf_counter() - t0
-    image.save(output)
+    save_image(
+        image,
+        output,
+        GenMeta(
+            prompt=prompt,
+            width=width,
+            height=height,
+            seed=seed,
+            steps=steps,
+            precision=precision,
+            loras=loras or None,
+            strength=strength,
+        ),
+    )
     post = log_pipe(current_pipe(), label="post-gen")
     monitor = monitor_ctx.summary() if monitor_ctx else None
     if monitor:

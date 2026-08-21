@@ -13,8 +13,9 @@ from diffusers import ZImageImg2ImgPipeline
 from safetensors.torch import load_file
 from PIL import Image
 
-from .config import load_pipeline
+from .config import default_precision, load_pipeline
 from .exceptions import ClientDisconnected
+from .metadata import GenMeta, save_image
 from .text_encoder import encode_prompts, pipe_device, release_text_encoder
 
 
@@ -205,6 +206,7 @@ def _denoise_on_pipe_with_snapshots(
     prompt_embeds: list[torch.Tensor],
     on_snapshot: Callable[[dict], None] | None = None,
     loras_count: int = 0,
+    meta: GenMeta | None = None,
 ) -> None:
     """One max-step denoise; decode predicted x0 at each pending step (not noisy latents)."""
     from diffusers.pipelines.z_image.pipeline_z_image import (
@@ -273,8 +275,24 @@ def _denoise_on_pipe_with_snapshots(
             if completed in pending:
                 image = _latents_to_pil(pipe, x0)
                 output = Path(snapshots[completed])
-                output.parent.mkdir(parents=True, exist_ok=True)
-                image.save(output)
+                if meta is not None:
+                    save_image(
+                        image,
+                        output,
+                        GenMeta(
+                            prompt=meta.prompt,
+                            width=meta.width,
+                            height=meta.height,
+                            seed=meta.seed,
+                            steps=completed,
+                            precision=meta.precision,
+                            loras=meta.loras,
+                            strength=meta.strength,
+                        ),
+                    )
+                else:
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    image.save(output)
                 pending.discard(completed)
                 if on_snapshot:
                     now = time.perf_counter()
@@ -439,6 +457,16 @@ def run_batch_on_pipe(
                                 raise
 
                     try:
+                        job_meta = GenMeta(
+                            prompt=job["prompt"],
+                            width=width,
+                            height=height,
+                            seed=int(job["seed"]),
+                            steps=job_steps(job),
+                            precision=default_precision(),
+                            loras=loras,
+                            strength=strength,
+                        )
                         _denoise_on_pipe_with_snapshots(
                             pipe,
                             max_steps=job_steps(job),
@@ -449,6 +477,7 @@ def run_batch_on_pipe(
                             prompt_embeds=embeds_by_prompt[job["prompt"]],
                             on_snapshot=on_snapshot,
                             loras_count=len(loras or []),
+                            meta=job_meta,
                         )
                     except ClientDisconnected:
                         aborted = True
@@ -482,8 +511,20 @@ def run_batch_on_pipe(
                         prompt_embeds=embeds_by_prompt[job["prompt"]],
                     )
                 output = Path(job["output"])
-                output.parent.mkdir(parents=True, exist_ok=True)
-                image.save(output)
+                save_image(
+                    image,
+                    output,
+                    GenMeta(
+                        prompt=job["prompt"],
+                        width=width,
+                        height=height,
+                        seed=int(job["seed"]),
+                        steps=step_count,
+                        precision=default_precision(),
+                        loras=loras,
+                        strength=strength,
+                    ),
+                )
                 img_s = time.perf_counter() - t_img
                 emit(f"image {img_n}/{len(jobs)}: {img_s:.1f}s {label}{step_tag} → {output.name}")
                 result = {
