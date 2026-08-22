@@ -445,6 +445,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", mime)
         self.send_header("Content-Length", str(size))
+        if mime.startswith("text/html"):
+            self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         with path.open("rb") as fh:
             while chunk := fh.read(65536):

@@ -57,11 +57,16 @@ def save_image(image: Image.Image, path: Path | str, meta: GenMeta) -> None:
     image.save(resolved, pnginfo=pnginfo)
 
 
+def _image_text(im: Image.Image) -> dict[str, str]:
+    text = getattr(im, "text", None)
+    return text if isinstance(text, dict) else {}
+
+
 def read_prompt(path: Path | str) -> str | None:
     """Positive prompt from PNG parameters chunk, or None."""
     resolved = Path(path).expanduser().resolve()
     with Image.open(resolved) as im:
-        raw = (im.text or {}).get("parameters")
+        raw = _image_text(im).get("parameters")
     if not raw:
         return None
     if NEGATIVE_PROMPT_MARKER in raw:
@@ -77,7 +82,7 @@ def embed_prompt(path: Path | str, prompt: str) -> None:
     resolved = Path(path).expanduser().resolve()
     with Image.open(resolved) as im:
         image = im.convert("RGB")
-        extra = {k: v for k, v in (im.text or {}).items() if k != "parameters"}
+        extra = {k: v for k, v in _image_text(im).items() if k != "parameters"}
     width, height = image.size
     pnginfo = PngInfo()
     for key, value in extra.items():

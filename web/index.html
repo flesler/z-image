@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>z-image</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    *, *::before, *::after { box-sizing: border-box; }
+    html { box-sizing: border-box; }
+    *, *::before, *::after { box-sizing: inherit; }
 
     html, body {
       height: 100%;
@@ -75,32 +75,42 @@
     }
 
     .field { display: block; }
+    .hidden { display: none !important; }
     .field-grow { flex: 1 1 auto; min-height: 4.5em; display: flex; flex-direction: column; }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55em; }
 
-    input, textarea, select {
+    #gen-form input:not([type="file"]),
+    #gen-form textarea,
+    #gen-form select {
+      display: block;
       width: 100%;
+      margin: 0;
       background: #0f131c;
       border: 1px solid rgba(255,255,255,0.08);
       color: #e8eaef;
       border-radius: 0.45em;
       font: inherit;
-      padding: 0.45em 0.65em;
+      line-height: 1.45;
+      padding: 0.7em 0.9em;
     }
 
-    textarea {
+    #gen-form textarea {
       flex: 1 1 auto;
       min-height: 4.5em;
       resize: none;
     }
 
-    input:focus, textarea:focus, select:focus {
+    #gen-form input:focus,
+    #gen-form textarea:focus,
+    #gen-form select:focus {
       outline: none;
       border-color: rgba(99, 132, 255, 0.55);
       box-shadow: 0 0 0 3px rgba(99, 132, 255, 0.12);
     }
 
-    input:not([type="file"]):disabled, textarea:disabled, select:disabled {
+    #gen-form input:not([type="file"]):disabled,
+    #gen-form textarea:disabled,
+    #gen-form select:disabled {
       opacity: 0.55;
       cursor: not-allowed;
     }
@@ -121,6 +131,12 @@
     .upload-btn:hover { border-color: rgba(99, 132, 255, 0.5); background: #151d2e; }
     .upload-btn.is-busy { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
     .upload-btn input { display: none; }
+
+    .gen-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.55em;
+    }
 
     .btn-primary {
       width: 100%;
@@ -270,24 +286,9 @@
           </label>
         </div>
 
-        <div class="grid-2">
-          <label class="field">
-            <span class="field-label">Steps</span>
-            <input id="steps" type="number" min="1" max="50" value="8">
-          </label>
-          <label class="field">
-            <span class="field-label">Seed</span>
-            <input id="seed" type="number" placeholder="random">
-          </label>
-        </div>
-
         <label class="field">
-          <span class="field-label">Precision</span>
-          <select id="precision">
-            <option value="q4" selected>q4</option>
-            <option value="q8">q8</option>
-            <option value="full">full</option>
-          </select>
+          <span class="field-label">Count</span>
+          <input id="count" type="number" min="1" max="50" value="1">
         </label>
 
         <label class="field">
@@ -303,10 +304,16 @@
           </label>
         </div>
 
-        <button type="submit" id="submit-btn" class="btn-primary">
-          <span id="submit-spinner" class="btn-spinner hidden" aria-hidden="true"></span>
-          <span id="submit-text">Generate</span>
-        </button>
+        <div class="gen-actions">
+          <button type="button" id="preview-btn" class="btn-primary">
+            <span class="btn-spinner hidden" aria-hidden="true"></span>
+            <span class="btn-text">Preview</span>
+          </button>
+          <button type="button" id="refine-btn" class="btn-primary" disabled>
+            <span class="btn-spinner hidden" aria-hidden="true"></span>
+            <span class="btn-text">Refine</span>
+          </button>
+        </div>
         <p id="status"></p>
       </form>
     </section>
@@ -337,12 +344,90 @@
     let index = 0;
     let generating = false;
     let captioning = false;
+    let genProgress = null;
+    let genAbort = false;
+    let lastSeed = null;
+    let lastGenMode = null;
+    let activeGenMode = null;
+
+    const PREVIEW_STEPS = 3;
+    const REFINED_STEPS = 8;
+    const FORM_STORAGE_KEY = 'z-image-form';
+
+    function readFormState() {
+      return {
+        prompt: $('prompt').value,
+        width: $('width').value,
+        height: $('height').value,
+        count: $('count').value,
+        lora: $('lora').value,
+      };
+    }
+
+    function saveFormState() {
+      try {
+        localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(readFormState()));
+      } catch {
+        // ignore quota / private mode
+      }
+    }
+
+    function loadFormState() {
+      try {
+        const raw = localStorage.getItem(FORM_STORAGE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (typeof data.prompt === 'string') $('prompt').value = data.prompt;
+        if (data.width != null) $('width').value = data.width;
+        if (data.height != null) $('height').value = data.height;
+        if (data.count != null) $('count').value = data.count;
+        if (typeof data.lora === 'string') $('lora').value = data.lora;
+      } catch {
+        // ignore corrupt storage
+      }
+    }
+
+    function canAbortQueue() {
+      return generating && genProgress && genProgress.current < genProgress.total;
+    }
+
+    function canRefine() {
+      return lastSeed != null && lastGenMode !== 'refined';
+    }
+
+    function updateGenButton(btn, mode, label) {
+      const spinner = btn.querySelector('.btn-spinner');
+      const text = btn.querySelector('.btn-text');
+      const isActive = generating && activeGenMode === mode;
+      const abortable = canAbortQueue() && isActive;
+      spinner.classList.toggle('hidden', !isActive || abortable);
+      if (abortable) {
+        text.textContent = genAbort ? 'Aborting…' : 'Abort';
+      } else if (isActive && genProgress) {
+        text.textContent = `${label} ${genProgress.current}/${genProgress.total}…`;
+      } else if (isActive) {
+        text.textContent = `${label}…`;
+      } else {
+        text.textContent = label;
+      }
+    }
 
     function updateControls() {
       const workerBusy = generating || captioning;
-      $('submit-btn').disabled = workerBusy;
-      $('submit-spinner').classList.toggle('hidden', !generating);
-      $('submit-text').textContent = generating ? 'Generating…' : 'Generate';
+      const abortable = canAbortQueue();
+      const previewBtn = $('preview-btn');
+      const refineBtn = $('refine-btn');
+
+      if (generating) {
+        previewBtn.disabled = activeGenMode !== 'preview' || !abortable;
+        refineBtn.disabled = activeGenMode !== 'refined' || !abortable;
+      } else {
+        previewBtn.disabled = false;
+        refineBtn.disabled = !canRefine();
+      }
+
+      updateGenButton(previewBtn, 'preview', 'Preview');
+      updateGenButton(refineBtn, 'refined', 'Refine');
       $('upload-btn').classList.toggle('is-busy', workerBusy);
       $('upload-label').textContent = captioning ? 'Captioning…' : 'Choose image…';
     }
@@ -466,44 +551,99 @@
       updateViewer();
     }
 
-    async function onSubmit(e) {
-      e.preventDefault();
-      if (generating || captioning) return;
+    async function generateOne(payload) {
+      const res = await fetch('/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Generation failed');
+      if (data.gallery_path) {
+        focusImage(data.gallery_path);
+      }
+      loadGallery({ keepPath: data.gallery_path }).catch(() => {});
+      return data;
+    }
+
+    async function runGeneration(mode) {
+      if (captioning) return;
+
+      if (generating) {
+        if (canAbortQueue() && !genAbort && activeGenMode === mode) {
+          genAbort = true;
+          updateControls();
+          setStatus(`Finishing ${genProgress.current} of ${genProgress.total}, then stopping…`);
+        }
+        return;
+      }
+
+      if (mode === 'refined' && !canRefine()) return;
+
       const prompt = $('prompt').value.trim();
       if (!prompt) return;
 
+      saveFormState();
+
+      const count = Math.max(1, Math.min(50, parseInt($('count').value, 10) || 1));
+      const loras = parseLoras($('lora').value);
+      const steps = mode === 'preview' ? PREVIEW_STEPS : REFINED_STEPS;
+      const basePayload = {
+        prompt,
+        width: parseInt($('width').value, 10),
+        height: parseInt($('height').value, 10),
+        steps,
+      };
+      if (loras.length) basePayload.loras = loras;
+
+      genAbort = false;
+      activeGenMode = mode;
       setGenerating(true);
+      genProgress = count > 1 ? { current: 0, total: count } : null;
+      const modeLabel = mode === 'preview' ? 'Preview' : 'Refine';
       setStatus('');
       try {
-        const payload = {
-          prompt,
-          width: parseInt($('width').value, 10),
-          height: parseInt($('height').value, 10),
-          steps: parseInt($('steps').value, 10),
-          precision: $('precision').value,
-        };
-        const seedVal = $('seed').value.trim();
-        if (seedVal) payload.seed = parseInt(seedVal, 10);
-        const loras = parseLoras($('lora').value);
-        if (loras.length) payload.loras = loras;
-
-        const res = await fetch('/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Generation failed');
-
-        if (data.gallery_path) {
-          focusImage(data.gallery_path);
+        let last = null;
+        let done = 0;
+        for (let i = 0; i < count; i++) {
+          if (i > 0 && genAbort) {
+            break;
+          }
+          if (genProgress) {
+            genProgress.current = i + 1;
+            updateControls();
+            setStatus(`${modeLabel} ${i + 1} of ${count}…`);
+          }
+          const payload = { ...basePayload };
+          if (mode === 'refined') {
+            payload.seed = lastSeed + i;
+          }
+          last = await generateOne(payload);
+          lastSeed = last.seed;
+          lastGenMode = mode;
+          done = i + 1;
         }
-        loadGallery({ keepPath: data.gallery_path }).catch(() => {});
-        setStatus(`Done in ${data.elapsed_s}s · seed ${data.seed}`);
+        if (genAbort) {
+          setStatus(`Stopped after ${done} of ${count} · seed ${last?.seed ?? '—'}`);
+        } else if (count > 1) {
+          setStatus(`${modeLabel} done ${count} images · seed ${last.seed}`);
+        } else {
+          setStatus(`${modeLabel} done in ${last.elapsed_s}s · seed ${last.seed}`);
+        }
       } catch (err) {
         setStatus(err.message, true);
       } finally {
+        genAbort = false;
+        genProgress = null;
+        activeGenMode = null;
         setGenerating(false);
+      }
+    }
+
+    async function onSubmit(e) {
+      e.preventDefault();
+      if (!generating) {
+        await runGeneration('preview');
       }
     }
 
@@ -537,6 +677,8 @@
     }
 
     $('gen-form').addEventListener('submit', onSubmit);
+    $('preview-btn').addEventListener('click', () => runGeneration('preview'));
+    $('refine-btn').addEventListener('click', () => runGeneration('refined'));
     $('upload').addEventListener('change', onUpload);
     $('prev-btn').addEventListener('click', () => step(-1));
     $('next-btn').addEventListener('click', () => step(1));
@@ -545,6 +687,7 @@
       if (e.key === 'ArrowRight') step(1);
     });
 
+    loadFormState();
     loadGallery().catch((err) => setStatus(err.message, true));
   </script>
 </body>
