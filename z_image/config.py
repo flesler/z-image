@@ -73,11 +73,11 @@ def loras_dir() -> Path:
 
 
 def worker_host() -> str:
-    return os.environ.get("Z_IMAGE_WORKER_HOST", "127.0.0.1")
+    return os.environ.get("Z_IMAGE_WORKER_HOST", "0.0.0.0")
 
 
 def worker_port() -> int:
-    return int(os.environ.get("Z_IMAGE_WORKER_PORT", "18765"))
+    return int(os.environ.get("Z_IMAGE_WORKER_PORT", "8000"))
 
 
 def worker_log() -> Path:

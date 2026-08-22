@@ -9,4 +9,6 @@ export Z_IMAGE_VAE_TILING="${Z_IMAGE_VAE_TILING:-0}"     # 1 = enable only if de
 export Z_IMAGE_GPU_MONITOR="${Z_IMAGE_GPU_MONITOR:-1}"   # log device placement per denoise step
 export Z_IMAGE_PROMPT_EMBED_CACHE="${Z_IMAGE_PROMPT_EMBED_CACHE:-1}"  # disk cache for prompt embeds
 export Z_IMAGE_IDLE_UNLOAD_MINUTES="${Z_IMAGE_IDLE_UNLOAD_MINUTES:-5}"  # 0 = keep model loaded forever
+export Z_IMAGE_WORKER_HOST="${Z_IMAGE_WORKER_HOST:-0.0.0.0}"
+export Z_IMAGE_WORKER_PORT="${Z_IMAGE_WORKER_PORT:-8000}"
 export PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.venv/bin:$PATH"

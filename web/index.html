@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>z-image</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body { height: 100%; }
+    body { background: #0b0d12; color: #e8eaef; }
+    .panel { background: rgba(18, 22, 32, 0.92); border: 1px solid rgba(255,255,255,0.06); }
+    input, textarea, select {
+      background: #0f131c; border: 1px solid rgba(255,255,255,0.08);
+      color: #e8eaef; border-radius: 0.5rem;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none; border-color: rgba(99, 132, 255, 0.55);
+      box-shadow: 0 0 0 3px rgba(99, 132, 255, 0.12);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #4f7cff, #6b5cff);
+      color: white; font-weight: 600;
+    }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; filter: none; }
+    .btn-spinner {
+      width: 1rem; height: 1rem;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 9999px;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    input:not([type="file"]):disabled, textarea:disabled, select:disabled {
+      opacity: 0.55; cursor: not-allowed;
+    }
+    .upload-btn {
+      display: flex; align-items: center; justify-content: center;
+      margin-top: 0.25rem; width: 100%; padding: 0.625rem 0.75rem;
+      border-radius: 0.5rem; border: 1px dashed rgba(255,255,255,0.22);
+      background: #121826; color: #e8eaef; font-size: 0.875rem;
+      cursor: pointer; transition: border-color 0.15s, background 0.15s;
+    }
+    .upload-btn:hover { border-color: rgba(99, 132, 255, 0.5); background: #151d2e; }
+    .upload-btn.is-busy { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
+    .upload-btn input { display: none; }
+    #preview { max-height: min(78vh, 900px); max-width: 100%; object-fit: contain; }
+    .nav-btn {
+      background: rgba(0,0,0,0.45); backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .nav-btn:hover { background: rgba(0,0,0,0.65); }
+  </style>
+</head>
+<body class="min-h-full">
+  <div class="min-h-screen flex flex-col lg:flex-row gap-3 p-3 lg:p-4">
+    <!-- Form -->
+    <section class="panel rounded-2xl p-4 lg:p-5 w-full lg:w-[min(420px,38vw)] shrink-0 flex flex-col gap-3 overflow-y-auto max-h-[48vh] lg:max-h-none">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight">z-image</h1>
+        <p class="text-xs text-white/45 mt-1">Generate from the warm worker</p>
+      </div>
+
+      <form id="gen-form" class="flex flex-col gap-3 flex-1">
+        <label class="block">
+          <span class="text-xs uppercase tracking-wide text-white/45">Prompt</span>
+          <textarea id="prompt" rows="4" required
+            class="mt-1 w-full px-3 py-2 text-sm resize-y min-h-[5.5rem]"
+            placeholder="Describe the image…"></textarea>
+        </label>
+
+        <div class="grid grid-cols-2 gap-2">
+          <label class="block">
+            <span class="text-xs uppercase tracking-wide text-white/45">Width</span>
+            <input id="width" type="number" min="256" max="4096" step="16" value="1024"
+              class="mt-1 w-full px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs uppercase tracking-wide text-white/45">Height</span>
+            <input id="height" type="number" min="256" max="4096" step="16" value="1024"
+              class="mt-1 w-full px-3 py-2 text-sm">
+          </label>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <label class="block">
+            <span class="text-xs uppercase tracking-wide text-white/45">Steps</span>
+            <input id="steps" type="number" min="1" max="50" value="8"
+              class="mt-1 w-full px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs uppercase tracking-wide text-white/45">Seed</span>
+            <input id="seed" type="number" placeholder="random"
+              class="mt-1 w-full px-3 py-2 text-sm">
+          </label>
+        </div>
+
+        <label class="block">
+          <span class="text-xs uppercase tracking-wide text-white/45">Precision</span>
+          <select id="precision" class="mt-1 w-full px-3 py-2 text-sm">
+            <option value="q4" selected>q4</option>
+            <option value="q8">q8</option>
+            <option value="full">full</option>
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="text-xs uppercase tracking-wide text-white/45">LoRA</span>
+          <input id="lora" type="text" placeholder="name.safetensors:1.0"
+            class="mt-1 w-full px-3 py-2 text-sm">
+        </label>
+
+        <div class="block">
+          <span class="text-xs uppercase tracking-wide text-white/45">Image → prompt</span>
+          <label id="upload-btn" class="upload-btn">
+            <input id="upload" type="file" accept="image/*">
+            <span id="upload-label">Choose image…</span>
+          </label>
+        </div>
+
+        <button type="submit" id="submit-btn"
+          class="btn-primary mt-1 w-full rounded-xl py-2.5 text-sm transition flex items-center justify-center gap-2">
+          <span id="submit-spinner" class="btn-spinner hidden" aria-hidden="true"></span>
+          <span id="submit-text">Generate</span>
+        </button>
+        <p id="status" class="text-xs text-white/40 min-h-[1rem]"></p>
+      </form>
+    </section>
+
+    <!-- Preview -->
+    <section class="panel rounded-2xl flex-1 min-h-[42vh] lg:min-h-0 flex flex-col relative overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-white/5">
+        <span class="text-sm text-white/60">Gallery</span>
+        <span id="counter" class="text-xs text-white/40 tabular-nums"></span>
+      </div>
+
+      <div class="flex-1 flex items-center justify-center p-4 relative min-h-0">
+        <button type="button" id="prev-btn" aria-label="Previous"
+          class="nav-btn absolute left-3 z-10 rounded-full w-10 h-10 text-lg">‹</button>
+
+        <div class="flex flex-col items-center justify-center w-full h-full min-h-0 gap-3">
+          <img id="preview" alt="" class="rounded-lg shadow-2xl shadow-black/40 hidden">
+          <p id="empty" class="text-sm text-white/35">No images in gallery yet</p>
+          <p id="preview-meta" class="text-xs text-white/40 text-center px-6 truncate max-w-full"></p>
+        </div>
+
+        <button type="button" id="next-btn" aria-label="Next"
+          class="nav-btn absolute right-3 z-10 rounded-full w-10 h-10 text-lg">›</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let images = [];
+    let index = 0;
+    let generating = false;
+    let captioning = false;
+
+    function updateControls() {
+      const workerBusy = generating || captioning;
+      $('submit-btn').disabled = workerBusy;
+      $('submit-spinner').classList.toggle('hidden', !generating);
+      $('submit-text').textContent = generating ? 'Generating…' : 'Generate';
+      $('upload-btn').classList.toggle('is-busy', workerBusy);
+      $('upload-label').textContent = captioning ? 'Captioning…' : 'Choose image…';
+    }
+
+    function setGenerating(on) {
+      generating = on;
+      updateControls();
+    }
+
+    function setCaptioning(on) {
+      captioning = on;
+      updateControls();
+    }
+
+    function setStatus(msg) {
+      $('status').textContent = msg || '';
+    }
+
+    function formatDate(ts) {
+      return new Date(ts * 1000).toLocaleString();
+    }
+
+    function fileUrl(path) {
+      return `/gallery/file?path=${encodeURIComponent(path)}`;
+    }
+
+    function parseLoras(text) {
+      const raw = text.trim();
+      if (!raw) return [];
+      return raw.split(',').map((part) => {
+        const [name, strength] = part.trim().split(':');
+        const file = name.endsWith('.safetensors') ? name : `${name}.safetensors`;
+        return { file, strength: strength ? parseFloat(strength) : 1 };
+      });
+    }
+
+    async function readPngPrompt(file) {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+      if (buf.length < 8 || sig.some((b, i) => buf[i] !== b)) return null;
+      const dec = new TextDecoder();
+      let off = 8;
+      while (off + 8 <= buf.length) {
+        const len = (buf[off] << 24) | (buf[off + 1] << 16) | (buf[off + 2] << 8) | buf[off + 3];
+        const type = dec.decode(buf.subarray(off + 4, off + 8));
+        const data = buf.subarray(off + 8, off + 8 + len);
+        if (type === 'tEXt') {
+          const nul = data.indexOf(0);
+          if (nul < 0) break;
+          const key = dec.decode(data.subarray(0, nul));
+          const val = dec.decode(data.subarray(nul + 1));
+          if (key === 'parameters') {
+            return val.split('Negative prompt:')[0].trim() || null;
+          }
+        }
+        off += 12 + len;
+      }
+      return null;
+    }
+
+    function updateViewer() {
+      const img = $('preview');
+      const empty = $('empty');
+      const meta = $('preview-meta');
+      const counter = $('counter');
+
+      if (!images.length) {
+        img.classList.add('hidden');
+        img.removeAttribute('src');
+        empty.classList.remove('hidden');
+        meta.textContent = '';
+        counter.textContent = '';
+        return;
+      }
+
+      empty.classList.add('hidden');
+      img.classList.remove('hidden');
+      const item = images[index];
+      img.src = fileUrl(item.path);
+      img.alt = item.name;
+      meta.textContent = `${item.name} · ${formatDate(item.created_at)}`;
+      counter.textContent = `${index + 1} / ${images.length}`;
+    }
+
+    function step(delta) {
+      if (!images.length) return;
+      index = (index + delta + images.length) % images.length;
+      updateViewer();
+    }
+
+    function focusImage(path) {
+      const existing = images.findIndex((item) => item.path === path);
+      if (existing >= 0) {
+        index = existing;
+      } else {
+        images.unshift({
+          name: path.split('/').pop(),
+          path,
+          created_at: Date.now() / 1000,
+          size: 0,
+        });
+        index = 0;
+      }
+      updateViewer();
+    }
+
+    async function loadGallery({ keepPath } = {}) {
+      const focused = keepPath ?? (images[index]?.path ?? null);
+      const res = await fetch('/gallery?recursive=1');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load gallery');
+      images = data.images || [];
+      if (focused) {
+        const idx = images.findIndex((item) => item.path === focused);
+        index = idx >= 0 ? idx : 0;
+      } else if (index >= images.length) {
+        index = 0;
+      }
+      updateViewer();
+    }
+
+    async function onSubmit(e) {
+      e.preventDefault();
+      if (generating || captioning) return;
+      const prompt = $('prompt').value.trim();
+      if (!prompt) return;
+
+      setGenerating(true);
+      setStatus('');
+      try {
+        const payload = {
+          prompt,
+          width: parseInt($('width').value, 10),
+          height: parseInt($('height').value, 10),
+          steps: parseInt($('steps').value, 10),
+          precision: $('precision').value,
+        };
+        const seedVal = $('seed').value.trim();
+        if (seedVal) payload.seed = parseInt(seedVal, 10);
+        const loras = parseLoras($('lora').value);
+        if (loras.length) payload.loras = loras;
+
+        const res = await fetch('/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Generation failed');
+
+        if (data.gallery_path) {
+          focusImage(data.gallery_path);
+        }
+        loadGallery({ keepPath: data.gallery_path }).catch(() => {});
+        setStatus(`Done in ${data.elapsed_s}s · seed ${data.seed}`);
+      } catch (err) {
+        setStatus(err.message);
+      } finally {
+        setGenerating(false);
+      }
+    }
+
+    async function onUpload(e) {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file || generating || captioning) return;
+
+      try {
+        const fromMeta = await readPngPrompt(file);
+        if (fromMeta) {
+          $('prompt').value = fromMeta;
+          setStatus('Prompt loaded from PNG metadata');
+          return;
+        }
+
+        setCaptioning(true);
+        setStatus('Captioning…');
+        const fd = new FormData();
+        fd.append('image', file);
+        const res = await fetch('/caption/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Caption failed');
+        $('prompt').value = data.caption;
+        setStatus(data.source === 'blip' ? `Captioned (${data.device})` : 'Prompt from metadata');
+      } catch (err) {
+        setStatus(err.message);
+      } finally {
+        if (captioning) setCaptioning(false);
+      }
+    }
+
+    $('gen-form').addEventListener('submit', onSubmit);
+    $('upload').addEventListener('change', onUpload);
+    $('prev-btn').addEventListener('click', () => step(-1));
+    $('next-btn').addEventListener('click', () => step(1));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft') step(-1);
+      if (e.key === 'ArrowRight') step(1);
+    });
+
+    loadGallery().catch((err) => setStatus(err.message));
+  </script>
+</body>
+</html>

@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import random
 import sys
 import time
 import traceback
+import uuid
+import cgi
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -15,6 +18,7 @@ from urllib.parse import parse_qs, urlparse
 from zimage.paths import get_loras_dir
 
 from .config import (
+    ROOT,
     apply_env,
     default_precision,
     ensure_gpu_pipeline_patch,
@@ -28,6 +32,8 @@ from .config import (
 )
 from .caption import caption_image, caption_model_device, unload_caption_model
 from .gallery import gallery_root, list_images, open_gallery_file
+from .metadata import read_prompt
+from .naming import output_filename
 from .exceptions import ClientDisconnected
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
 from .init_image import load_init_image
@@ -43,6 +49,8 @@ apply_env()
 ensure_gpu_pipeline_patch()
 LORAS_DIR = get_loras_dir()
 _idle_guard = IdleGuard()
+WEB_UI = ROOT / "web" / "index.html"
+UPLOADS_DIR = gallery_root() / ".uploads"
 
 
 def log(msg: str) -> None:
@@ -86,12 +94,48 @@ def run_caption_job(body: dict) -> dict:
     }
 
 
+def run_caption_upload(data: bytes, filename: str, *, device: str = "auto") -> dict:
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    suffix = Path(filename).suffix or ".png"
+    path = UPLOADS_DIR / f"{uuid.uuid4().hex}{suffix}"
+    path.write_bytes(data)
+    try:
+        prompt = read_prompt(path)
+        if prompt:
+            return {"caption": prompt, "source": "metadata"}
+        pipeline_loaded = current_pipe() is not None
+        caption = caption_image(path, device=device, pipeline_loaded=pipeline_loaded)
+        return {"caption": caption, "source": "blip", "device": caption_model_device()}
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def run_generate_job(body: dict) -> dict:
     prompt = body["prompt"]
-    output = Path(body["output"])
     width = int(body.get("width", 1024))
     height = int(body.get("height", 1024))
-    seed = int(body.get("seed", 42))
+    seed = body.get("seed")
+    if seed is None:
+        seed = random.randint(0, 2**31 - 1)
+    else:
+        seed = int(seed)
+    body["seed"] = seed
+    steps = resolve_steps(body.get("steps"))
+    strength = body.get("strength")
+    img_strength = float(strength) if strength is not None else None
+
+    if "output" not in body:
+        filename = output_filename(
+            prompt,
+            width,
+            height,
+            seed,
+            steps,
+            strength=img_strength if body.get("image") else None,
+        )
+        body["output"] = str(gallery_root() / filename)
+
+    output = Path(body["output"])
     precision = resolve_precision(body.get("precision"))
     steps = resolve_steps(body.get("steps"))
     loras = resolve_loras(body.get("loras", []))
@@ -147,11 +191,14 @@ def run_generate_job(body: dict) -> dict:
     if monitor:
         log_summary(monitor, label="gen")
     log(f"done in {elapsed:.1f}s loras={len(loras)} → {output}")
+    rel = output.resolve().relative_to(gallery_root())
     return {
         "output": str(output),
+        "gallery_path": rel.as_posix(),
         "precision": precision,
         "loras": len(loras),
         "elapsed_s": round(elapsed, 2),
+        "seed": seed,
         "gpu": post,
         "monitor": monitor,
     }
@@ -229,6 +276,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path in ("/", "/index.html"):
+            if not WEB_UI.is_file():
+                self._json(404, {"error": "web ui not found"})
+                return
+            self._send_file(WEB_UI, content_type="text/html; charset=utf-8")
+            return
         if parsed.path == "/health":
             self._json(
                 200,
@@ -246,8 +299,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/gallery":
             params = parse_qs(parsed.query)
             subfolder = params.get("subfolder", [None])[0]
+            recursive = params.get("recursive", ["0"])[0] in ("1", "true", "yes")
             try:
-                images = list_images(subfolder)
+                images = list_images(subfolder, recursive=recursive)
             except ValueError as e:
                 self._json(400, {"error": str(e)})
                 return
@@ -276,18 +330,23 @@ class Handler(BaseHTTPRequestHandler):
         self._json(404, {"error": "not found"})
 
     def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        if parsed.path == "/caption/upload":
+            self._handle_caption_upload()
+            return
+
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length))
 
         try:
             with _idle_guard.job():
-                if self.path == "/caption":
+                if parsed.path == "/caption":
                     self._json(200, run_caption_job(body))
                     return
-                if self.path == "/generate":
+                if parsed.path == "/generate":
                     self._json(200, run_generate_job(body))
                     return
-                if self.path == "/generate_batch":
+                if parsed.path == "/generate_batch":
                     if body.get("stream"):
                         self._stream_batch(body)
                     else:
@@ -303,6 +362,39 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         self._json(404, {"error": "not found"})
+
+    def _handle_caption_upload(self) -> None:
+        content_type = self.headers.get("Content-Type", "")
+        if "multipart/form-data" not in content_type:
+            self._json(400, {"error": "expected multipart/form-data"})
+            return
+        form = cgi.FieldStorage(
+            fp=self.rfile,
+            headers=self.headers,
+            environ={
+                "REQUEST_METHOD": "POST",
+                "CONTENT_TYPE": content_type,
+                "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
+            },
+        )
+        if "image" not in form:
+            self._json(400, {"error": "image required"})
+            return
+        field = form["image"]
+        if not getattr(field, "file", None):
+            self._json(400, {"error": "image required"})
+            return
+        data = field.file.read()
+        filename = field.filename or "upload.png"
+        device = form.getvalue("device", "auto")
+        try:
+            with _idle_guard.job():
+                result = run_caption_upload(data, filename, device=device)
+            self._json(200, result)
+        except Exception as e:
+            log(f"error: {e}")
+            traceback.print_exc()
+            self._json(500, {"error": str(e)})
 
     def _stream_batch(self, body: dict) -> None:
         self.send_response(200)
@@ -348,9 +440,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _send_file(self, path: Path) -> None:
-        mime, _ = mimetypes.guess_type(path.name)
-        mime = mime or "application/octet-stream"
+    def _send_file(self, path: Path, *, content_type: str | None = None) -> None:
+        mime = content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         size = path.stat().st_size
         self.send_response(200)
         self.send_header("Content-Type", mime)
