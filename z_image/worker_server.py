@@ -74,6 +74,17 @@ def _release_caption_gpu() -> None:
     unload_caption_model()
 
 
+def run_image_upload(data: bytes, filename: str) -> dict:
+    uploads_dir = gallery_root() / ".uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    suffix = Path(filename).suffix.lower() or ".png"
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}:
+        suffix = ".png"
+    path = uploads_dir / f"current{suffix}"
+    path.write_bytes(data)
+    return {"path": str(path.resolve())}
+
+
 def run_caption_upload(data: bytes, filename: str, *, device: str = "auto") -> dict:
     suffix = Path(filename).suffix or ".png"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
@@ -333,6 +344,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/caption/upload":
             self._handle_caption_upload()
             return
+        if parsed.path == "/upload":
+            self._handle_image_upload()
+            return
 
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length))
@@ -361,6 +375,36 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         self._json(404, {"error": "not found"})
+
+    def _handle_image_upload(self) -> None:
+        content_type = self.headers.get("Content-Type", "")
+        if "multipart/form-data" not in content_type:
+            self._json(400, {"error": "expected multipart/form-data"})
+            return
+        form = cgi.FieldStorage(
+            fp=self.rfile,
+            headers=self.headers,
+            environ={
+                "REQUEST_METHOD": "POST",
+                "CONTENT_TYPE": content_type,
+                "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
+            },
+        )
+        if "image" not in form:
+            self._json(400, {"error": "image required"})
+            return
+        field = form["image"]
+        if not getattr(field, "file", None):
+            self._json(400, {"error": "image required"})
+            return
+        data = field.file.read()
+        filename = field.filename or "upload.png"
+        try:
+            self._json(200, run_image_upload(data, filename))
+        except Exception as e:
+            log(f"error: {e}")
+            traceback.print_exc()
+            self._json(500, {"error": str(e)})
 
     def _handle_caption_upload(self) -> None:
         content_type = self.headers.get("Content-Type", "")
