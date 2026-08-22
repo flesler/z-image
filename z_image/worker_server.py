@@ -7,9 +7,9 @@ import mimetypes
 import os
 import random
 import sys
+import tempfile
 import time
 import traceback
-import uuid
 import cgi
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -50,7 +50,6 @@ ensure_gpu_pipeline_patch()
 LORAS_DIR = get_loras_dir()
 _idle_guard = IdleGuard()
 WEB_UI = ROOT / "web" / "index.html"
-UPLOADS_DIR = gallery_root() / ".uploads"
 
 
 def log(msg: str) -> None:
@@ -72,8 +71,23 @@ def resolve_loras(entries: list[dict]) -> list[tuple[str, float]]:
 
 
 def _release_caption_gpu() -> None:
-    if caption_model_device() == "cuda":
-        unload_caption_model()
+    unload_caption_model()
+
+
+def run_caption_upload(data: bytes, filename: str, *, device: str = "auto") -> dict:
+    suffix = Path(filename).suffix or ".png"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(data)
+        path = Path(tmp.name)
+    try:
+        prompt = read_prompt(path)
+        if prompt:
+            return {"caption": prompt, "source": "metadata"}
+        pipeline_loaded = current_pipe() is not None
+        caption = caption_image(path, device=device, pipeline_loaded=pipeline_loaded)
+        return {"caption": caption, "source": "blip", "device": caption_model_device()}
+    finally:
+        path.unlink(missing_ok=True)
 
 
 def run_caption_job(body: dict) -> dict:
@@ -92,22 +106,6 @@ def run_caption_job(body: dict) -> dict:
         "device": caption_model_device(),
         "elapsed_s": round(elapsed, 2),
     }
-
-
-def run_caption_upload(data: bytes, filename: str, *, device: str = "auto") -> dict:
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    suffix = Path(filename).suffix or ".png"
-    path = UPLOADS_DIR / f"{uuid.uuid4().hex}{suffix}"
-    path.write_bytes(data)
-    try:
-        prompt = read_prompt(path)
-        if prompt:
-            return {"caption": prompt, "source": "metadata"}
-        pipeline_loaded = current_pipe() is not None
-        caption = caption_image(path, device=device, pipeline_loaded=pipeline_loaded)
-        return {"caption": caption, "source": "blip", "device": caption_model_device()}
-    finally:
-        path.unlink(missing_ok=True)
 
 
 def run_generate_job(body: dict) -> dict:
@@ -292,6 +290,7 @@ class Handler(BaseHTTPRequestHandler):
                     "caption_device": caption_model_device(),
                     "idle_unload_min": idle_unload_minutes(),
                     "idle_s": round(_idle_guard.idle_seconds(), 1),
+                    "gallery_root": str(gallery_root()),
                     "gpu": snapshot(current_pipe()),
                 },
             )
@@ -466,7 +465,9 @@ def main() -> None:
     release_text_encoder(current_pipe())
     log_pipe(current_pipe(), label="warmup")
     _idle_guard.start()
+    root = gallery_root()
     log(f"ready on http://{worker_host()}:{worker_port()}")
+    log(f"gallery root: {root}")
     HTTPServer((worker_host(), worker_port()), Handler).serve_forever()
 
 

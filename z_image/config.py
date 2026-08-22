@@ -60,12 +60,27 @@ def apply_env() -> None:
             os.environ["PATH"] = f"{venv_path}{os.pathsep}{path}"
 
 
+def data_dir() -> Path:
+    return Path(os.environ.get("Z_IMAGE_DATA_DIR", ROOT / "data"))
+
+
+def data_output_dir() -> Path:
+    return Path(os.environ.get("Z_IMAGE_DATA_OUTPUT_DIR", data_dir() / "outputs"))
+
+
 def output_dir() -> Path:
-    return Path(os.environ.get("Z_IMAGE_OUTPUT_DIR", "/tmp/z-image"))
+    return Path(os.environ.get("Z_IMAGE_OUTPUT_DIR", data_output_dir()))
 
 
 def batch_dir() -> Path:
     return output_dir() / "batch"
+
+
+def worker_connect_host() -> str:
+    host = worker_host()
+    if host in ("0.0.0.0", "::"):
+        return "127.0.0.1"
+    return host
 
 
 def loras_dir() -> Path:
@@ -116,11 +131,3 @@ def gpu_monitor_enabled() -> bool:
 
 def idle_unload_minutes() -> float:
     return float(os.environ.get("Z_IMAGE_IDLE_UNLOAD_MINUTES", "5"))
-
-
-def data_dir() -> Path:
-    return Path(os.environ.get("Z_IMAGE_DATA_DIR", ROOT / "data"))
-
-
-def data_output_dir() -> Path:
-    return Path(os.environ.get("Z_IMAGE_DATA_OUTPUT_DIR", data_dir() / "outputs"))

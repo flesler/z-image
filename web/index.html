@@ -6,146 +6,327 @@
   <title>z-image</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    html, body { height: 100%; }
-    body { background: #0b0d12; color: #e8eaef; }
-    .panel { background: rgba(18, 22, 32, 0.92); border: 1px solid rgba(255,255,255,0.06); }
-    input, textarea, select {
-      background: #0f131c; border: 1px solid rgba(255,255,255,0.08);
-      color: #e8eaef; border-radius: 0.5rem;
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      margin: 0;
     }
+
+    body {
+      background: #0b0d12;
+      color: #e8eaef;
+      font-size: clamp(0.72rem, 0.55rem + 0.9vmin, 1rem);
+      line-height: 1.35;
+      overflow: hidden;
+    }
+
+    .shell {
+      height: 100dvh;
+      display: flex;
+      flex-direction: row;
+      gap: 0.75em;
+      padding: 0.75em;
+    }
+
+    .panel {
+      background: rgba(18, 22, 32, 0.92);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 1em;
+      min-height: 0;
+    }
+
+    .form-panel {
+      width: clamp(14em, 32vw, 24em);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 0.9em 1em;
+      overflow: hidden;
+    }
+
+    .gallery-panel {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .title { font-size: 1.35em; font-weight: 600; letter-spacing: -0.02em; }
+    .subtitle { font-size: 0.78em; color: rgba(255,255,255,0.45); margin-top: 0.2em; }
+    .field-label {
+      display: block;
+      font-size: 0.72em;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 0.25em;
+    }
+
+    #gen-form {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6em;
+      margin-top: 0.65em;
+      overflow-y: auto;
+    }
+
+    .field { display: block; }
+    .field-grow { flex: 1 1 auto; min-height: 4.5em; display: flex; flex-direction: column; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55em; }
+
+    input, textarea, select {
+      width: 100%;
+      background: #0f131c;
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #e8eaef;
+      border-radius: 0.45em;
+      font: inherit;
+      padding: 0.45em 0.65em;
+    }
+
+    textarea {
+      flex: 1 1 auto;
+      min-height: 4.5em;
+      resize: none;
+    }
+
     input:focus, textarea:focus, select:focus {
-      outline: none; border-color: rgba(99, 132, 255, 0.55);
+      outline: none;
+      border-color: rgba(99, 132, 255, 0.55);
       box-shadow: 0 0 0 3px rgba(99, 132, 255, 0.12);
     }
-    .btn-primary {
-      background: linear-gradient(135deg, #4f7cff, #6b5cff);
-      color: white; font-weight: 600;
+
+    input:not([type="file"]):disabled, textarea:disabled, select:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
     }
+
+    .upload-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 0.55em 0.7em;
+      border-radius: 0.45em;
+      border: 1px dashed rgba(255,255,255,0.22);
+      background: #121826;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .upload-btn:hover { border-color: rgba(99, 132, 255, 0.5); background: #151d2e; }
+    .upload-btn.is-busy { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
+    .upload-btn input { display: none; }
+
+    .btn-primary {
+      width: 100%;
+      border: 0;
+      border-radius: 0.65em;
+      padding: 0.6em 0.8em;
+      font: inherit;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, #4f7cff, #6b5cff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45em;
+      cursor: pointer;
+      transition: filter 0.15s;
+    }
+
     .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
     .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; filter: none; }
+
     .btn-spinner {
-      width: 1rem; height: 1rem;
+      width: 1em;
+      height: 1em;
       border: 2px solid rgba(255,255,255,0.3);
       border-top-color: white;
       border-radius: 9999px;
       animation: spin 0.7s linear infinite;
     }
+
     @keyframes spin { to { transform: rotate(360deg); } }
-    input:not([type="file"]):disabled, textarea:disabled, select:disabled {
-      opacity: 0.55; cursor: not-allowed;
+
+    #status { font-size: 0.78em; color: rgba(255,255,255,0.4); min-height: 1.2em; }
+    #status.is-error { color: #ff8a8a; }
+
+    .gallery-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65em 1em;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.92em;
+      color: rgba(255,255,255,0.6);
+      flex-shrink: 0;
     }
-    .upload-btn {
-      display: flex; align-items: center; justify-content: center;
-      margin-top: 0.25rem; width: 100%; padding: 0.625rem 0.75rem;
-      border-radius: 0.5rem; border: 1px dashed rgba(255,255,255,0.22);
-      background: #121826; color: #e8eaef; font-size: 0.875rem;
-      cursor: pointer; transition: border-color 0.15s, background 0.15s;
+
+    #counter { font-size: 0.85em; color: rgba(255,255,255,0.4); font-variant-numeric: tabular-nums; }
+
+    .preview-stage {
+      flex: 1 1 0;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 0.75em;
     }
-    .upload-btn:hover { border-color: rgba(99, 132, 255, 0.5); background: #151d2e; }
-    .upload-btn.is-busy { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
-    .upload-btn input { display: none; }
-    #preview { max-height: min(78vh, 900px); max-width: 100%; object-fit: contain; }
+
+    .preview-wrap {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5em;
+      min-height: 0;
+    }
+
+    #preview {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      border-radius: 0.5em;
+      box-shadow: 0 1.2em 2.5em rgba(0,0,0,0.45);
+    }
+
+    #empty { font-size: 0.92em; color: rgba(255,255,255,0.35); }
+    #preview-meta {
+      font-size: 0.78em;
+      color: rgba(255,255,255,0.4);
+      text-align: center;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 0 1.5em;
+      flex-shrink: 0;
+    }
+
     .nav-btn {
-      background: rgba(0,0,0,0.45); backdrop-filter: blur(6px);
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: clamp(2em, 4.5vmin, 2.6em);
+      height: clamp(2em, 4.5vmin, 2.6em);
+      border-radius: 9999px;
       border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(6px);
+      color: #e8eaef;
+      font-size: 1.2em;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 2;
     }
+
     .nav-btn:hover { background: rgba(0,0,0,0.65); }
+    #prev-btn { left: 0.6em; }
+    #next-btn { right: 0.6em; }
+
+    @media (max-aspect-ratio: 10/11) {
+      .shell { flex-direction: column; }
+      .form-panel {
+        width: 100%;
+        flex: 0 0 auto;
+        max-height: 44dvh;
+      }
+      .gallery-panel { flex: 1 1 0; }
+    }
   </style>
 </head>
-<body class="min-h-full">
-  <div class="min-h-screen flex flex-col lg:flex-row gap-3 p-3 lg:p-4">
-    <!-- Form -->
-    <section class="panel rounded-2xl p-4 lg:p-5 w-full lg:w-[min(420px,38vw)] shrink-0 flex flex-col gap-3 overflow-y-auto max-h-[48vh] lg:max-h-none">
+<body>
+  <div class="shell">
+    <section class="panel form-panel">
       <div>
-        <h1 class="text-xl font-semibold tracking-tight">z-image</h1>
-        <p class="text-xs text-white/45 mt-1">Generate from the warm worker</p>
+        <h1 class="title">z-image</h1>
+        <p class="subtitle">Generate from the warm worker</p>
       </div>
 
-      <form id="gen-form" class="flex flex-col gap-3 flex-1">
-        <label class="block">
-          <span class="text-xs uppercase tracking-wide text-white/45">Prompt</span>
-          <textarea id="prompt" rows="4" required
-            class="mt-1 w-full px-3 py-2 text-sm resize-y min-h-[5.5rem]"
-            placeholder="Describe the image…"></textarea>
+      <form id="gen-form">
+        <label class="field field-grow">
+          <span class="field-label">Prompt</span>
+          <textarea id="prompt" required placeholder="Describe the image…"></textarea>
         </label>
 
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block">
-            <span class="text-xs uppercase tracking-wide text-white/45">Width</span>
-            <input id="width" type="number" min="256" max="4096" step="16" value="1024"
-              class="mt-1 w-full px-3 py-2 text-sm">
+        <div class="grid-2">
+          <label class="field">
+            <span class="field-label">Width</span>
+            <input id="width" type="number" min="256" max="4096" step="16" value="1024">
           </label>
-          <label class="block">
-            <span class="text-xs uppercase tracking-wide text-white/45">Height</span>
-            <input id="height" type="number" min="256" max="4096" step="16" value="1024"
-              class="mt-1 w-full px-3 py-2 text-sm">
+          <label class="field">
+            <span class="field-label">Height</span>
+            <input id="height" type="number" min="256" max="4096" step="16" value="1024">
           </label>
         </div>
 
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block">
-            <span class="text-xs uppercase tracking-wide text-white/45">Steps</span>
-            <input id="steps" type="number" min="1" max="50" value="8"
-              class="mt-1 w-full px-3 py-2 text-sm">
+        <div class="grid-2">
+          <label class="field">
+            <span class="field-label">Steps</span>
+            <input id="steps" type="number" min="1" max="50" value="8">
           </label>
-          <label class="block">
-            <span class="text-xs uppercase tracking-wide text-white/45">Seed</span>
-            <input id="seed" type="number" placeholder="random"
-              class="mt-1 w-full px-3 py-2 text-sm">
+          <label class="field">
+            <span class="field-label">Seed</span>
+            <input id="seed" type="number" placeholder="random">
           </label>
         </div>
 
-        <label class="block">
-          <span class="text-xs uppercase tracking-wide text-white/45">Precision</span>
-          <select id="precision" class="mt-1 w-full px-3 py-2 text-sm">
+        <label class="field">
+          <span class="field-label">Precision</span>
+          <select id="precision">
             <option value="q4" selected>q4</option>
             <option value="q8">q8</option>
             <option value="full">full</option>
           </select>
         </label>
 
-        <label class="block">
-          <span class="text-xs uppercase tracking-wide text-white/45">LoRA</span>
-          <input id="lora" type="text" placeholder="name.safetensors:1.0"
-            class="mt-1 w-full px-3 py-2 text-sm">
+        <label class="field">
+          <span class="field-label">LoRA</span>
+          <input id="lora" type="text" placeholder="name.safetensors:1.0">
         </label>
 
-        <div class="block">
-          <span class="text-xs uppercase tracking-wide text-white/45">Image → prompt</span>
+        <div class="field">
+          <span class="field-label">Image → prompt</span>
           <label id="upload-btn" class="upload-btn">
             <input id="upload" type="file" accept="image/*">
             <span id="upload-label">Choose image…</span>
           </label>
         </div>
 
-        <button type="submit" id="submit-btn"
-          class="btn-primary mt-1 w-full rounded-xl py-2.5 text-sm transition flex items-center justify-center gap-2">
+        <button type="submit" id="submit-btn" class="btn-primary">
           <span id="submit-spinner" class="btn-spinner hidden" aria-hidden="true"></span>
           <span id="submit-text">Generate</span>
         </button>
-        <p id="status" class="text-xs text-white/40 min-h-[1rem]"></p>
+        <p id="status"></p>
       </form>
     </section>
 
-    <!-- Preview -->
-    <section class="panel rounded-2xl flex-1 min-h-[42vh] lg:min-h-0 flex flex-col relative overflow-hidden">
-      <div class="flex items-center justify-between px-4 py-3 border-b border-white/5">
-        <span class="text-sm text-white/60">Gallery</span>
-        <span id="counter" class="text-xs text-white/40 tabular-nums"></span>
+    <section class="panel gallery-panel">
+      <div class="gallery-header">
+        <span>Gallery</span>
+        <span id="counter"></span>
       </div>
 
-      <div class="flex-1 flex items-center justify-center p-4 relative min-h-0">
-        <button type="button" id="prev-btn" aria-label="Previous"
-          class="nav-btn absolute left-3 z-10 rounded-full w-10 h-10 text-lg">‹</button>
+      <div class="preview-stage">
+        <button type="button" id="prev-btn" class="nav-btn" aria-label="Previous">‹</button>
 
-        <div class="flex flex-col items-center justify-center w-full h-full min-h-0 gap-3">
-          <img id="preview" alt="" class="rounded-lg shadow-2xl shadow-black/40 hidden">
-          <p id="empty" class="text-sm text-white/35">No images in gallery yet</p>
-          <p id="preview-meta" class="text-xs text-white/40 text-center px-6 truncate max-w-full"></p>
+        <div class="preview-wrap">
+          <img id="preview" alt="" class="hidden">
+          <p id="empty">No images in gallery yet</p>
+          <p id="preview-meta"></p>
         </div>
 
-        <button type="button" id="next-btn" aria-label="Next"
-          class="nav-btn absolute right-3 z-10 rounded-full w-10 h-10 text-lg">›</button>
+        <button type="button" id="next-btn" class="nav-btn" aria-label="Next">›</button>
       </div>
     </section>
   </div>
@@ -176,8 +357,10 @@
       updateControls();
     }
 
-    function setStatus(msg) {
-      $('status').textContent = msg || '';
+    function setStatus(msg, isError = false) {
+      const el = $('status');
+      el.textContent = msg || '';
+      el.classList.toggle('is-error', Boolean(isError && msg));
     }
 
     function formatDate(ts) {
@@ -318,7 +501,7 @@
         loadGallery({ keepPath: data.gallery_path }).catch(() => {});
         setStatus(`Done in ${data.elapsed_s}s · seed ${data.seed}`);
       } catch (err) {
-        setStatus(err.message);
+        setStatus(err.message, true);
       } finally {
         setGenerating(false);
       }
@@ -347,7 +530,7 @@
         $('prompt').value = data.caption;
         setStatus(data.source === 'blip' ? `Captioned (${data.device})` : 'Prompt from metadata');
       } catch (err) {
-        setStatus(err.message);
+        setStatus(err.message, true);
       } finally {
         if (captioning) setCaptioning(false);
       }
@@ -362,7 +545,7 @@
       if (e.key === 'ArrowRight') step(1);
     });
 
-    loadGallery().catch((err) => setStatus(err.message));
+    loadGallery().catch((err) => setStatus(err.message, true));
   </script>
 </body>
 </html>

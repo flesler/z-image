@@ -6,25 +6,25 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from .config import VENV_BIN, ROOT, apply_env, worker_host, worker_port
+from .config import VENV_BIN, ROOT, apply_env, worker_connect_host, worker_port
 from .loras import LoraSpec, resolve_path
 from .metadata import GenMeta, save_image
 
 
 def health_url() -> str:
-    return f"http://{worker_host()}:{worker_port()}/health"
+    return f"http://{worker_connect_host()}:{worker_port()}/health"
 
 
 def caption_url() -> str:
-    return f"http://{worker_host()}:{worker_port()}/caption"
+    return f"http://{worker_connect_host()}:{worker_port()}/caption"
 
 
 def generate_url() -> str:
-    return f"http://{worker_host()}:{worker_port()}/generate"
+    return f"http://{worker_connect_host()}:{worker_port()}/generate"
 
 
 def generate_batch_url() -> str:
-    return f"http://{worker_host()}:{worker_port()}/generate_batch"
+    return f"http://{worker_connect_host()}:{worker_port()}/generate_batch"
 
 
 def is_healthy() -> bool:
