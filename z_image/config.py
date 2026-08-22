@@ -120,3 +120,7 @@ def idle_unload_minutes() -> float:
 
 def data_dir() -> Path:
     return Path(os.environ.get("Z_IMAGE_DATA_DIR", ROOT / "data"))
+
+
+def data_output_dir() -> Path:
+    return Path(os.environ.get("Z_IMAGE_DATA_OUTPUT_DIR", data_dir() / "outputs"))

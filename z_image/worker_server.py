@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import sys
 import time
 import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from zimage.paths import get_loras_dir
 
@@ -25,6 +27,7 @@ from .config import (
     worker_port,
 )
 from .caption import caption_image, caption_model_device, unload_caption_model
+from .gallery import gallery_root, list_images, open_gallery_file
 from .exceptions import ClientDisconnected
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
 from .init_image import load_init_image
@@ -225,7 +228,8 @@ class Handler(BaseHTTPRequestHandler):
         log(fmt % args)
 
     def do_GET(self) -> None:
-        if self.path == "/health":
+        parsed = urlparse(self.path)
+        if parsed.path == "/health":
             self._json(
                 200,
                 {
@@ -238,6 +242,36 @@ class Handler(BaseHTTPRequestHandler):
                     "gpu": snapshot(current_pipe()),
                 },
             )
+            return
+        if parsed.path == "/gallery":
+            params = parse_qs(parsed.query)
+            subfolder = params.get("subfolder", [None])[0]
+            try:
+                images = list_images(subfolder)
+            except ValueError as e:
+                self._json(400, {"error": str(e)})
+                return
+            self._json(
+                200,
+                {
+                    "root": str(gallery_root()),
+                    "subfolder": subfolder,
+                    "images": images,
+                },
+            )
+            return
+        if parsed.path == "/gallery/file":
+            params = parse_qs(parsed.query)
+            rel_path = params.get("path", [None])[0]
+            if not rel_path:
+                self._json(400, {"error": "path required"})
+                return
+            try:
+                self._send_file(open_gallery_file(rel_path))
+            except ValueError as e:
+                self._json(400, {"error": str(e)})
+            except FileNotFoundError:
+                self._json(404, {"error": "not found"})
             return
         self._json(404, {"error": "not found"})
 
@@ -313,6 +347,18 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _send_file(self, path: Path) -> None:
+        mime, _ = mimetypes.guess_type(path.name)
+        mime = mime or "application/octet-stream"
+        size = path.stat().st_size
+        self.send_response(200)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(size))
+        self.end_headers()
+        with path.open("rb") as fh:
+            while chunk := fh.read(65536):
+                self.wfile.write(chunk)
 
 
 def main() -> None:
