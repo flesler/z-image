@@ -21,12 +21,24 @@
       overflow: hidden;
     }
 
+    body.portrait {
+      overflow-y: auto;
+      scroll-snap-type: y mandatory;
+    }
+
     .shell {
       height: 100dvh;
       display: flex;
       flex-direction: row;
       gap: 0.75em;
       padding: 0.75em;
+    }
+
+    body.portrait .shell {
+      height: auto;
+      flex-direction: column;
+      gap: 0;
+      padding: 0;
     }
 
     .panel {
@@ -43,6 +55,19 @@
       flex-direction: column;
       padding: 0.9em 1em;
       overflow: hidden;
+      container-type: size;
+      container-name: form;
+    }
+
+    body.portrait .form-panel {
+      width: 100%;
+      flex: 0 0 100dvh;
+      height: 100dvh;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
     }
 
     .gallery-panel {
@@ -51,6 +76,16 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      container-type: size;
+      container-name: gallery;
+    }
+
+    body.portrait .gallery-panel {
+      flex: 0 0 100dvh;
+      height: 100dvh;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      border-radius: 0;
     }
 
     .title { font-size: 1.35em; font-weight: 600; letter-spacing: -0.02em; }
@@ -67,17 +102,37 @@
     #gen-form {
       flex: 1 1 auto;
       min-height: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.6em;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: minmax(0, 1fr) repeat(5, auto);
+      gap: 0.65em;
       margin-top: 0.65em;
-      overflow-y: auto;
+      overflow: hidden;
+      align-content: start;
     }
 
-    .field { display: block; }
+    .field { display: block; min-width: 0; }
     .hidden { display: none !important; }
-    .field-grow { flex: 1 1 auto; min-height: 4.5em; display: flex; flex-direction: column; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55em; }
+
+    .field-prompt {
+      grid-column: 1 / -1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .field-width { grid-column: 1; }
+    .field-height { grid-column: 2; }
+    .field-count { grid-column: 1; }
+    .field-lora { grid-column: 2; }
+    .field-upload { grid-column: 1 / -1; }
+
+    .gen-actions {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.55em;
+    }
 
     #gen-form input:not([type="file"]),
     #gen-form textarea,
@@ -96,8 +151,46 @@
 
     #gen-form textarea {
       flex: 1 1 auto;
-      min-height: 4.5em;
+      min-height: 3.5em;
       resize: none;
+    }
+
+    @container form (min-height: 0) {
+      .title { font-size: clamp(0.9rem, 4.5cqh, 1.35rem); }
+      .subtitle { font-size: clamp(0.65rem, 2.8cqh, 0.78rem); }
+      .field-label { font-size: clamp(0.6rem, 2.5cqh, 0.72rem); }
+      #gen-form { gap: clamp(0.4em, 1.8cqh, 0.65em); }
+      #gen-form input:not([type="file"]),
+      #gen-form textarea,
+      #gen-form select {
+        padding: clamp(0.45em, 2cqh, 0.7em) clamp(0.55em, 2.5cqw, 0.9em);
+      }
+      #gen-form textarea {
+        min-height: max(3em, 8cqh);
+      }
+      .upload-btn { padding: clamp(0.4em, 2cqh, 0.55em) clamp(0.5em, 2cqw, 0.7em); }
+      .btn-primary { padding: clamp(0.45em, 2.2cqh, 0.6em) clamp(0.55em, 2.5cqw, 0.8em); }
+      #status {
+        font-size: clamp(0.65rem, 2.5cqh, 0.78rem);
+        height: clamp(1.2em, 2.8cqh, 1.35em);
+        line-height: clamp(1.2em, 2.8cqh, 1.35em);
+      }
+    }
+
+    @container gallery (min-height: 0) {
+      .gallery-header {
+        padding: clamp(0.45em, 2.5cqh, 0.65em) clamp(0.6em, 3cqw, 1em);
+        font-size: clamp(0.8rem, 3.2cqh, 0.92rem);
+      }
+      #counter { font-size: clamp(0.7rem, 2.8cqh, 0.85rem); }
+      .preview-stage { padding: clamp(0.4em, 2.5cqh, 0.75em); }
+      .nav-btn {
+        width: clamp(1.8em, 9cqh, 2.6em);
+        height: clamp(1.8em, 9cqh, 2.6em);
+        font-size: clamp(0.9rem, 4cqh, 1.2rem);
+      }
+      #preview-meta { font-size: clamp(0.65rem, 2.5cqh, 0.78rem); }
+      #empty { font-size: clamp(0.8rem, 3.2cqh, 0.92rem); }
     }
 
     #gen-form input:focus,
@@ -132,12 +225,6 @@
     .upload-btn.is-busy { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
     .upload-btn input { display: none; }
 
-    .gen-actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.55em;
-    }
-
     .btn-primary {
       width: 100%;
       border: 0;
@@ -169,7 +256,17 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    #status { font-size: 0.78em; color: rgba(255,255,255,0.4); min-height: 1.2em; }
+    #status {
+      grid-column: 1 / -1;
+      font-size: 0.78em;
+      color: rgba(255,255,255,0.4);
+      height: 1.35em;
+      line-height: 1.35em;
+      margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     #status.is-error { color: #ff8a8a; }
 
     .gallery-header {
@@ -226,6 +323,7 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       padding: 0 1.5em;
+      margin-bottom: 0.75em;
       flex-shrink: 0;
     }
 
@@ -250,53 +348,79 @@
     #prev-btn { left: 0.6em; }
     #next-btn { right: 0.6em; }
 
+    .scroll-jump-btn {
+      position: fixed;
+      right: 1em;
+      bottom: 1em;
+      width: 2.6em;
+      height: 2.6em;
+      border-radius: 9999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(6px);
+      color: #e8eaef;
+      font-size: 1.2em;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+    }
+
+    .scroll-jump-btn.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .scroll-jump-btn:hover { background: rgba(0,0,0,0.75); }
+
     @media (max-aspect-ratio: 10/11) {
-      .shell { flex-direction: column; }
-      .form-panel {
+      body:not(.portrait) .shell { flex-direction: column; }
+      body:not(.portrait) .form-panel {
         width: 100%;
         flex: 0 0 auto;
         max-height: 44dvh;
       }
-      .gallery-panel { flex: 1 1 0; }
+      body:not(.portrait) .gallery-panel { flex: 1 1 0; }
     }
   </style>
 </head>
 <body>
-  <div class="shell">
+  <div class="shell" id="shell">
     <section class="panel form-panel">
-      <div>
+      <div class="form-header">
         <h1 class="title">z-image</h1>
         <p class="subtitle">Generate from the warm worker</p>
       </div>
 
       <form id="gen-form">
-        <label class="field field-grow">
+        <label class="field field-prompt">
           <span class="field-label">Prompt</span>
           <textarea id="prompt" required placeholder="Describe the image…"></textarea>
         </label>
 
-        <div class="grid-2">
-          <label class="field">
-            <span class="field-label">Width</span>
-            <input id="width" type="number" min="256" max="4096" step="16" value="1024">
-          </label>
-          <label class="field">
-            <span class="field-label">Height</span>
-            <input id="height" type="number" min="256" max="4096" step="16" value="1024">
-          </label>
-        </div>
+        <label class="field field-width">
+          <span class="field-label">Width</span>
+          <input id="width" type="number" min="256" max="4096" step="16" value="1024">
+        </label>
 
-        <label class="field">
+        <label class="field field-height">
+          <span class="field-label">Height</span>
+          <input id="height" type="number" min="256" max="4096" step="16" value="1024">
+        </label>
+
+        <label class="field field-count">
           <span class="field-label">Count</span>
           <input id="count" type="number" min="1" max="50" value="1">
         </label>
 
-        <label class="field">
+        <label class="field field-lora">
           <span class="field-label">LoRA</span>
           <input id="lora" type="text" placeholder="name.safetensors:1.0">
         </label>
 
-        <div class="field">
+        <div class="field field-upload">
           <span class="field-label">Upload image</span>
           <label id="upload-btn" class="upload-btn">
             <input id="upload" type="file" accept="image/*">
@@ -314,11 +438,12 @@
             <span class="btn-text">Refine</span>
           </button>
         </div>
+
         <p id="status"></p>
       </form>
     </section>
 
-    <section class="panel gallery-panel">
+    <section class="panel gallery-panel" id="gallery-panel">
       <div class="gallery-header">
         <span>Gallery</span>
         <span id="counter"></span>
@@ -337,6 +462,8 @@
       </div>
     </section>
   </div>
+
+  <button type="button" id="scroll-jump-btn" class="scroll-jump-btn" aria-label="Scroll down">↓</button>
 
   <script>
     const $ = (id) => document.getElementById(id);
@@ -399,6 +526,70 @@
       return lastSeed != null && lastGenMode !== 'refined';
     }
 
+    function canGenerate() {
+      return lastGenMode === 'refined';
+    }
+
+    function secondaryMode() {
+      return canRefine() ? 'refined' : 'generate';
+    }
+
+    function secondaryLabel() {
+      return canRefine() ? 'Refine' : 'Generate';
+    }
+
+    function canSecondary() {
+      return canRefine() || canGenerate();
+    }
+
+    function isSecondaryMode(mode) {
+      return mode === 'refined' || mode === 'generate';
+    }
+
+    function updatePortraitLayout() {
+      document.body.classList.toggle('portrait', window.innerHeight > window.innerWidth);
+      updateScrollJumpBtn();
+    }
+
+    function scrollToForm() {
+      if (!document.body.classList.contains('portrait')) return;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function scrollToGallery() {
+      if (!document.body.classList.contains('portrait')) return;
+      $('gallery-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function isOnGalleryPanel() {
+      return window.scrollY > window.innerHeight * 0.4;
+    }
+
+    function updateScrollJumpBtn() {
+      const btn = $('scroll-jump-btn');
+      if (!document.body.classList.contains('portrait')) {
+        btn.classList.remove('visible');
+        return;
+      }
+      btn.classList.add('visible');
+      if (isOnGalleryPanel()) {
+        btn.textContent = '↑';
+        btn.setAttribute('aria-label', 'Scroll up');
+      } else {
+        btn.textContent = '↓';
+        btn.setAttribute('aria-label', 'Scroll down');
+      }
+    }
+
+    function onScrollJumpClick() {
+      if (!document.body.classList.contains('portrait')) return;
+      if (isOnGalleryPanel()) {
+        scrollToForm();
+      } else {
+        scrollToGallery();
+      }
+    }
+
     function updateGenButton(btn, mode, label) {
       const spinner = btn.querySelector('.btn-spinner');
       const text = btn.querySelector('.btn-text');
@@ -421,17 +612,23 @@
       const abortable = canAbortQueue();
       const previewBtn = $('preview-btn');
       const refineBtn = $('refine-btn');
+      const rightMode = secondaryMode();
+      const rightLabel = secondaryLabel();
 
       if (generating) {
         previewBtn.disabled = activeGenMode !== 'preview' || !abortable;
-        refineBtn.disabled = activeGenMode !== 'refined' || !abortable;
+        refineBtn.disabled = !isSecondaryMode(activeGenMode) || !abortable;
+        if (abortable && isSecondaryMode(activeGenMode)) {
+          refineBtn.disabled = false;
+        }
       } else {
         previewBtn.disabled = false;
-        refineBtn.disabled = !canRefine();
+        refineBtn.disabled = !canSecondary();
       }
 
       updateGenButton(previewBtn, 'preview', 'Preview');
-      updateGenButton(refineBtn, 'refined', 'Refine');
+      const rightActiveMode = generating && isSecondaryMode(activeGenMode) ? activeGenMode : rightMode;
+      updateGenButton(refineBtn, rightActiveMode, rightLabel);
       $('upload-btn').classList.toggle('is-busy', workerBusy);
     }
 
@@ -638,7 +835,7 @@
       counter.classList.add('hidden');
     }
 
-    function updateViewer() {
+    function updateViewer({ scrollGallery = false } = {}) {
       const img = $('preview');
       const empty = $('empty');
       const meta = $('preview-meta');
@@ -646,6 +843,7 @@
 
       if (viewingUpload && uploadSource) {
         showUploadView();
+        if (scrollGallery) scrollToGallery();
         return;
       }
 
@@ -669,6 +867,7 @@
       meta.textContent = `${item.name} · ${formatDate(item.created_at)}`;
       counter.textContent = `${index + 1} / ${images.length}`;
       loadViewerImage(item);
+      if (scrollGallery) scrollToGallery();
     }
 
     function step(delta) {
@@ -677,26 +876,26 @@
         if (images.length) {
           index = galleryIndexBeforeUpload;
         }
-        updateViewer();
+        updateViewer({ scrollGallery: true });
         return;
       }
       if (!images.length) return;
       index = (index + delta + images.length) % images.length;
-      updateViewer();
+      updateViewer({ scrollGallery: true });
     }
 
     function goFirst() {
       if (!images.length) return;
       viewingUpload = false;
       index = 0;
-      updateViewer();
+      updateViewer({ scrollGallery: true });
     }
 
     function goLast() {
       if (!images.length) return;
       viewingUpload = false;
       index = images.length - 1;
-      updateViewer();
+      updateViewer({ scrollGallery: true });
     }
 
     function isFormFieldFocused() {
@@ -710,7 +909,7 @@
       return false;
     }
 
-    function focusImage(path) {
+    function focusImage(path, { scrollGallery = true } = {}) {
       viewingUpload = false;
       const existing = images.findIndex((item) => item.path === path);
       if (existing >= 0) {
@@ -724,10 +923,10 @@
         });
         index = 0;
       }
-      updateViewer();
+      updateViewer({ scrollGallery });
     }
 
-    async function loadGallery({ keepPath } = {}) {
+    async function loadGallery({ keepPath, scrollGallery = false } = {}) {
       const focused = keepPath ?? (images[index]?.path ?? null);
       const res = await fetch('/gallery?recursive=1');
       const data = await res.json();
@@ -739,7 +938,7 @@
       } else if (index >= images.length) {
         index = 0;
       }
-      updateViewer();
+      updateViewer({ scrollGallery });
     }
 
     async function generateOne(payload) {
@@ -756,10 +955,16 @@
           URL.revokeObjectURL(stale.objectUrl);
           imageCache.delete(data.gallery_path);
         }
+        await loadGallery({ keepPath: data.gallery_path });
         focusImage(data.gallery_path);
       }
-      loadGallery({ keepPath: data.gallery_path }).catch(() => {});
       return data;
+    }
+
+    function modeLabel(mode) {
+      if (mode === 'preview') return 'Preview';
+      if (mode === 'refined') return 'Refine';
+      return 'Generate';
     }
 
     async function runGeneration(mode) {
@@ -773,6 +978,7 @@
       }
 
       if (mode === 'refined' && !canRefine()) return;
+      if (mode === 'generate' && !canGenerate()) return;
 
       const prompt = $('prompt').value.trim();
       if (!prompt) return;
@@ -797,7 +1003,7 @@
       activeGenMode = mode;
       setGenerating(true);
       genProgress = count > 1 ? { current: 0, total: count } : null;
-      const modeLabel = mode === 'preview' ? 'Preview' : 'Refine';
+      const label = modeLabel(mode);
       setStatus('');
       try {
         let last = null;
@@ -809,7 +1015,7 @@
           if (genProgress) {
             genProgress.current = i + 1;
             updateControls();
-            setStatus(`${modeLabel} ${i + 1} of ${count}…`);
+            setStatus(`${label} ${i + 1} of ${count}…`);
           }
           const payload = { ...basePayload };
           if (mode === 'refined') {
@@ -817,17 +1023,20 @@
           }
           last = await generateOne(payload);
           lastSeed = last.seed;
-          lastGenMode = mode;
+          lastGenMode = mode === 'preview' ? 'preview' : 'refined';
           done = i + 1;
         }
         if (genAbort) {
           setStatus(`Stopped after ${done} of ${count} · seed ${last?.seed ?? '—'}`);
+        } else if (last?.skipped) {
+          setStatus(`Already exists · seed ${last.seed}`);
         } else if (count > 1) {
-          setStatus(`${modeLabel} done ${count} images · seed ${last.seed}`);
+          setStatus(`${label} done ${count} images · seed ${last.seed}`);
         } else {
-          setStatus(`${modeLabel} done in ${last.elapsed_s}s · seed ${last.seed}`);
+          setStatus(`${label} done in ${last.elapsed_s}s · seed ${last.seed}`);
         }
         clearUploadSource();
+        scrollToGallery();
       } catch (err) {
         setStatus(err.message, true);
       } finally {
@@ -836,6 +1045,10 @@
         activeGenMode = null;
         setGenerating(false);
       }
+    }
+
+    function runSecondary() {
+      runGeneration(secondaryMode());
     }
 
     async function onSubmit(e) {
@@ -875,7 +1088,7 @@
         };
         viewingUpload = true;
         applyGenMeta(meta);
-        updateViewer();
+        updateViewer({ scrollGallery: true });
         setStatus(meta.prompt ? 'Loaded from image metadata' : 'Image ready');
       } catch (err) {
         clearUploadSource();
@@ -885,15 +1098,19 @@
 
     $('gen-form').addEventListener('submit', onSubmit);
     $('preview-btn').addEventListener('click', () => runGeneration('preview'));
-    $('refine-btn').addEventListener('click', () => runGeneration('refined'));
+    $('refine-btn').addEventListener('click', () => runSecondary());
     $('upload').addEventListener('change', onUpload);
     $('prev-btn').addEventListener('click', () => step(-1));
     $('next-btn').addEventListener('click', () => step(1));
+    $('scroll-jump-btn').addEventListener('click', onScrollJumpClick);
+    window.addEventListener('resize', updatePortraitLayout);
+    window.addEventListener('scroll', updateScrollJumpBtn, { passive: true });
+
     document.addEventListener('keydown', (e) => {
       if (e.key === 'End' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        if (canRefine()) {
-          runGeneration('refined');
+        if (canSecondary()) {
+          runSecondary();
         } else {
           runGeneration('preview');
         }
@@ -902,12 +1119,28 @@
 
       if (isFormFieldFocused()) return;
 
-      if (e.key === 'Home') {
+      const key = e.key.toLowerCase();
+      if (key === 'p') {
+        e.preventDefault();
+        runGeneration('preview');
+      } else if (key === 'r' && canRefine()) {
+        e.preventDefault();
+        runGeneration('refined');
+      } else if (key === 'g' && canGenerate()) {
+        e.preventDefault();
+        runGeneration('generate');
+      } else if (e.key === 'Home') {
         e.preventDefault();
         goFirst();
       } else if (e.key === 'End') {
         e.preventDefault();
         goLast();
+      } else if (document.body.classList.contains('portrait') && (e.key === 'ArrowUp' || e.key === 'PageUp')) {
+        e.preventDefault();
+        scrollToForm();
+      } else if (document.body.classList.contains('portrait') && (e.key === 'ArrowDown' || e.key === 'PageDown')) {
+        e.preventDefault();
+        scrollToGallery();
       } else if (e.key === 'ArrowLeft') {
         step(-1);
       } else if (e.key === 'ArrowRight') {
@@ -916,6 +1149,7 @@
     });
 
     loadFormState();
+    updatePortraitLayout();
     loadGallery().catch((err) => setStatus(err.message, true));
   </script>
 </body>

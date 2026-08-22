@@ -119,6 +119,13 @@ def run_caption_job(body: dict) -> dict:
     }
 
 
+def _seed_from_filename(name: str) -> int | None:
+    import re
+
+    m = re.search(r"-(\d+)(?:-s\d+)?\.png$", name, re.I)
+    return int(m.group(1)) if m else None
+
+
 def run_generate_job(body: dict) -> dict:
     prompt = body["prompt"]
     width = int(body.get("width", 1024))
@@ -146,8 +153,22 @@ def run_generate_job(body: dict) -> dict:
 
     output = Path(body["output"])
     precision = resolve_precision(body.get("precision"))
-    steps = resolve_steps(body.get("steps"))
     loras = resolve_loras(body.get("loras", []))
+
+    if output.is_file():
+        rel = output.resolve().relative_to(gallery_root())
+        existing_seed = _seed_from_filename(output.name) or seed
+        log(f"skip existing → {output}")
+        return {
+            "output": str(output),
+            "gallery_path": rel.as_posix(),
+            "precision": precision,
+            "loras": len(loras),
+            "elapsed_s": 0,
+            "seed": existing_seed,
+            "skipped": True,
+        }
+
     init_image = None
     strength = None
     if body.get("image"):
