@@ -20,6 +20,7 @@ from zimage.paths import get_loras_dir
 from .config import (
     ROOT,
     apply_env,
+    default_precision,
     ensure_gpu_pipeline_patch,
     idle_unload_minutes,
     load_pipeline,
@@ -29,6 +30,7 @@ from .config import (
     worker_host,
     worker_port,
 )
+from .model_weights import ensure_model_downloaded, is_model_cached, model_repo_id
 from .caption import caption_image, caption_model_device, unload_caption_model
 from .gallery import gallery_root, list_images, open_gallery_file, delete_image
 from .metadata import read_prompt
@@ -79,9 +81,13 @@ def _release_caption_gpu() -> None:
 
 
 def _health_payload() -> dict:
+    precision = default_precision()
     return {
         "status": "ok",
         "model_loaded": current_pipe() is not None,
+        "weights_cached": is_model_cached(precision),
+        "model_repo": model_repo_id(precision),
+        "precision": precision,
         "caption_loaded": caption_model_device() is not None,
         "caption_device": caption_model_device(),
         "idle_unload_min": idle_unload_minutes(),
@@ -555,6 +561,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
 
 
+def _prefetch_weights() -> None:
+    try:
+        ensure_model_downloaded(default_precision())
+    except Exception as e:
+        log(f"model download failed: {e}")
+        traceback.print_exc()
+
+
 def main() -> None:
     legacy = remove_legacy_layout()
     if legacy:
@@ -570,6 +584,7 @@ def main() -> None:
     server.daemon_threads = True
     log(f"listening on http://{host}:{port}")
     log(f"gallery root: {gallery_root()}")
+    threading.Thread(target=_prefetch_weights, name="prefetch", daemon=True).start()
     server.serve_forever()
 
 

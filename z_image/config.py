@@ -30,6 +30,12 @@ def ensure_gpu_pipeline_patch() -> None:
 def load_pipeline(*args, **kwargs):
     """Always use the patched zimage.engine.load_pipeline (fast GPU path)."""
     ensure_gpu_pipeline_patch()
+    from .model_weights import ensure_model_downloaded
+
+    precision = kwargs.get("precision")
+    if precision is None and len(args) >= 2:
+        precision = args[1]
+    ensure_model_downloaded(precision)
     import zimage.engine as zengine
 
     return zengine.load_pipeline(*args, **kwargs)
