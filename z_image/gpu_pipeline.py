@@ -46,7 +46,7 @@ def _patch_pipeline_class(
                     if p.text_encoder is not None:
                         te = str(next(p.text_encoder.parameters()).device)
                     elapsed = time.perf_counter() - t0
-                    log(
+                    tslog(
                         f"step {step_index + 1}/{steps} "
                         f"tfm={tfm} te={te} elapsed={elapsed:.1f}s",
                         tag="gpu",

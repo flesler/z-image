@@ -1063,11 +1063,7 @@
       if (generating) {
         return;
       }
-      if (canSecondary()) {
-        await runGeneration(secondaryMode());
-      } else {
-        await runGeneration('preview');
-      }
+      await runGeneration('preview');
     }
 
     async function focusImage(path, { scrollGallery = true } = {}) {

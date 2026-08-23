@@ -7,9 +7,9 @@ import sys
 import time
 from pathlib import Path
 
-from .config import PIDFILE, ROOT, VENV_BIN, apply_env, default_precision, worker_log, worker_port
+from .config import PIDFILE, ROOT, VENV_BIN, apply_env, worker_log, worker_port
 from .log import log as tslog
-from .worker_client import fetch_health, is_healthy, is_ready
+from .worker_client import fetch_health, is_healthy
 
 
 def cmd_start() -> int:
@@ -17,7 +17,7 @@ def cmd_start() -> int:
     logfile = worker_log()
     logfile.parent.mkdir(parents=True, exist_ok=True)
 
-    if is_ready():
+    if is_healthy():
         print(f"worker already running on :{worker_port()}")
         return 0
 
@@ -36,7 +36,7 @@ def cmd_start() -> int:
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     proc = subprocess.Popen(
-        [str(python), "-m", "z_image.worker_server", default_precision()],
+        [str(python), "-m", "z_image.worker_server"],
         cwd=ROOT,
         stdout=logfh,
         stderr=subprocess.STDOUT,
@@ -48,8 +48,7 @@ def cmd_start() -> int:
 
     for _ in range(60):
         if is_healthy():
-            state = "ready" if is_ready() else f"warming {default_precision()}"
-            print(f"worker listening on :{worker_port()} ({state})")
+            print(f"worker ready on :{worker_port()}")
             return 0
         time.sleep(0.5)
 
@@ -81,7 +80,7 @@ def cmd_status() -> int:
     health = fetch_health()
     if health:
         pid = PIDFILE.read_text().strip() if PIDFILE.is_file() else "?"
-        state = health.get("status", "unknown")
+        state = "loaded" if health.get("model_loaded") else "idle"
         print(f"worker on :{worker_port()} (pid {pid}) — {state}")
         return 0
     print("worker not running")
