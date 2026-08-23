@@ -8,10 +8,11 @@ import os
 import random
 import sys
 import tempfile
+import threading
 import time
 import traceback
 import cgi
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -51,6 +52,9 @@ ensure_gpu_pipeline_patch()
 LORAS_DIR = get_loras_dir()
 _idle_guard = IdleGuard()
 WEB_UI = ROOT / "web" / "index.html"
+_gpu_lock = threading.RLock()
+_warmup_state = "pending"
+_warmup_error: str | None = None
 
 
 from .log import log as tslog
@@ -78,7 +82,66 @@ def _release_caption_gpu() -> None:
     unload_caption_model()
 
 
+def _health_payload() -> dict:
+    loaded = current_pipe() is not None
+    if loaded:
+        status = "ready"
+    elif _warmup_state == "error":
+        status = "error"
+    else:
+        status = "warming"
+    payload = {
+        "status": status,
+        "model_loaded": loaded,
+        "caption_loaded": caption_model_device() is not None,
+        "caption_device": caption_model_device(),
+        "idle_unload_min": idle_unload_minutes(),
+        "idle_s": round(_idle_guard.idle_seconds(), 1),
+        "gallery_root": str(gallery_root()),
+        "gpu": snapshot(current_pipe()),
+    }
+    if _warmup_error:
+        payload["warmup_error"] = _warmup_error
+    return payload
+
+
+def _warmup(precision: str) -> None:
+    global _warmup_state, _warmup_error
+    _warmup_state = "warming"
+    try:
+        with _idle_guard.job():
+            with _gpu_lock:
+                load_pipeline(precision=precision)
+                log_pipe(current_pipe(), label="warmup")
+        _warmup_state = "ready"
+        log(f"model ready precision={precision}")
+    except Exception as e:
+        _warmup_state = "error"
+        _warmup_error = str(e)
+        log(f"warmup failed: {e}")
+        traceback.print_exc()
+
+
+def _require_model(handler: "Handler") -> bool:
+    if current_pipe() is not None:
+        return True
+    if _warmup_state == "error":
+        handler._json(503, {"error": "model warmup failed", "detail": _warmup_error})
+    else:
+        handler._json(503, {"error": "model warming up"})
+    return False
+
+
 def run_image_upload(data: bytes, filename: str) -> dict:
+    uploads_dir = gallery_root() / ".uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    suffix = Path(filename).suffix.lower() or ".png"
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}:
+        suffix = ".png"
+    path = uploads_dir / f"current{suffix}"
+    path.write_bytes(data)
+    return {"path": str(path.resolve())}
+
     uploads_dir = gallery_root() / ".uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)
     suffix = Path(filename).suffix.lower() or ".png"
@@ -326,19 +389,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_file(WEB_UI, content_type="text/html; charset=utf-8")
             return
         if parsed.path == "/health":
-            self._json(
-                200,
-                {
-                    "status": "ok",
-                    "model_loaded": current_pipe() is not None,
-                    "caption_loaded": caption_model_device() is not None,
-                    "caption_device": caption_model_device(),
-                    "idle_unload_min": idle_unload_minutes(),
-                    "idle_s": round(_idle_guard.idle_seconds(), 1),
-                    "gallery_root": str(gallery_root()),
-                    "gpu": snapshot(current_pipe()),
-                },
-            )
+            self._json(200, _health_payload())
             return
         if parsed.path == "/gallery":
             params = parse_qs(parsed.query)
@@ -388,16 +439,23 @@ class Handler(BaseHTTPRequestHandler):
         try:
             with _idle_guard.job():
                 if parsed.path == "/caption":
-                    self._json(200, run_caption_job(body))
+                    with _gpu_lock:
+                        self._json(200, run_caption_job(body))
                     return
                 if parsed.path == "/generate":
-                    self._json(200, run_generate_job(body))
+                    if not _require_model(self):
+                        return
+                    with _gpu_lock:
+                        self._json(200, run_generate_job(body))
                     return
                 if parsed.path == "/generate_batch":
-                    if body.get("stream"):
-                        self._stream_batch(body)
-                    else:
-                        self._json(200, run_generate_batch(body))
+                    if not _require_model(self):
+                        return
+                    with _gpu_lock:
+                        if body.get("stream"):
+                            self._stream_batch(body)
+                        else:
+                            self._json(200, run_generate_batch(body))
                     return
         except ClientDisconnected:
             log("client disconnected")
@@ -466,7 +524,8 @@ class Handler(BaseHTTPRequestHandler):
         device = form.getvalue("device", "auto")
         try:
             with _idle_guard.job():
-                result = run_caption_upload(data, filename, device=device)
+                with _gpu_lock:
+                    result = run_caption_upload(data, filename, device=device)
             self._json(200, result)
         except Exception as e:
             log(f"error: {e}")
@@ -540,14 +599,15 @@ def main() -> None:
     if pruned["removed"]:
         log(f"cache prune: removed {pruned['removed']}, {pruned['remaining']} remaining")
 
-    log(f"warming up precision={precision}")
-    load_pipeline(precision=precision)
-    log_pipe(current_pipe(), label="warmup")
     _idle_guard.start()
-    root = gallery_root()
-    log(f"ready on http://{worker_host()}:{worker_port()}")
-    log(f"gallery root: {root}")
-    HTTPServer((worker_host(), worker_port()), Handler).serve_forever()
+    host = worker_host()
+    port = worker_port()
+    server = ThreadingHTTPServer((host, port), Handler)
+    server.daemon_threads = True
+    log(f"listening on http://{host}:{port}")
+    log(f"gallery root: {gallery_root()}")
+    threading.Thread(target=_warmup, args=(precision,), name="warmup", daemon=True).start()
+    server.serve_forever()
 
 
 if __name__ == "__main__":

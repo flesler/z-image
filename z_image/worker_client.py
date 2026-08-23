@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -28,25 +29,40 @@ def generate_batch_url() -> str:
     return f"http://{worker_connect_host()}:{worker_port()}/generate_batch"
 
 
-def is_healthy() -> bool:
+def fetch_health() -> dict | None:
     try:
         with urllib.request.urlopen(health_url(), timeout=2) as resp:
-            return resp.status == 200
-    except (urllib.error.URLError, TimeoutError):
-        return False
+            return json.loads(resp.read())
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        return None
+
+
+def is_healthy() -> bool:
+    return fetch_health() is not None
+
+
+def is_ready() -> bool:
+    body = fetch_health()
+    return bool(body and body.get("model_loaded"))
 
 
 def ensure_worker() -> None:
-    if is_healthy():
+    if is_ready():
         return
-    log("starting warm worker...")
-    python = VENV_BIN / "python"
-    cli = ROOT / "cli.py"
-    subprocess.run(
-        [str(python), str(cli), "daemon", "start"],
-        cwd=ROOT,
-        check=True,
-    )
+    if not is_healthy():
+        log("starting warm worker...")
+        python = VENV_BIN / "python"
+        cli = ROOT / "cli.py"
+        subprocess.run(
+            [str(python), str(cli), "daemon", "start"],
+            cwd=ROOT,
+            check=True,
+        )
+    for _ in range(180):
+        if is_ready():
+            return
+        time.sleep(1)
+    raise RuntimeError("worker failed to become ready within 180s")
 
 
 def caption_via_worker(path: Path | str, *, device: str = "auto") -> str:

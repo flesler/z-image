@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .config import PIDFILE, ROOT, VENV_BIN, apply_env, default_precision, worker_log, worker_port
 from .log import log as tslog
-from .worker_client import is_healthy
+from .worker_client import fetch_health, is_healthy, is_ready
 
 
 def cmd_start() -> int:
@@ -17,7 +17,7 @@ def cmd_start() -> int:
     logfile = worker_log()
     logfile.parent.mkdir(parents=True, exist_ok=True)
 
-    if is_healthy():
+    if is_ready():
         print(f"worker already running on :{worker_port()}")
         return 0
 
@@ -44,15 +44,16 @@ def cmd_start() -> int:
     )
     # Keep log handle open for the worker process lifetime (do not close here).
     PIDFILE.write_text(str(proc.pid))
-    print(f"starting worker (pid {proc.pid}), warming {default_precision()} — tail {logfile}")
+    print(f"starting worker (pid {proc.pid}) — tail {logfile}")
 
-    for _ in range(180):
+    for _ in range(60):
         if is_healthy():
-            print(f"worker ready on :{worker_port()}")
+            state = "ready" if is_ready() else f"warming {default_precision()}"
+            print(f"worker listening on :{worker_port()} ({state})")
             return 0
-        time.sleep(1)
+        time.sleep(0.5)
 
-    tslog("worker failed to become healthy within 180s")
+    tslog("worker failed to start within 30s")
     return 1
 
 
@@ -77,9 +78,11 @@ def cmd_restart() -> int:
 
 
 def cmd_status() -> int:
-    if is_healthy():
+    health = fetch_health()
+    if health:
         pid = PIDFILE.read_text().strip() if PIDFILE.is_file() else "?"
-        print(f"worker running on :{worker_port()} (pid {pid})")
+        state = health.get("status", "unknown")
+        print(f"worker on :{worker_port()} (pid {pid}) — {state}")
         return 0
     print("worker not running")
     return 1
