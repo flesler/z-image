@@ -7,6 +7,7 @@ from .config import PREVIEW_STEPS, apply_env, batch_dir, resolve_steps, resolve_
 from .init_image import load_init_image
 from .loras import LoraSpec, apply_triggers, expand_lora_specs, normalize_prompt, random_seed, resolve_spec
 from .naming import batch_filename, batch_stem
+from .templates import resolve_prompt
 from .worker_client import ensure_worker, generate_batch_via_worker
 
 
@@ -231,12 +232,21 @@ def _run_one_batch(
         if len(seed_runs) > 1:
             print(f"seed run: {iter_seed}", file=sys.stderr)
 
+        seed_base = seed_runs[0]
         for model_label, lora_specs, variant in models:
             for prompt in prompts:
                 for step_count in steps_list:
-                    final_prompt = apply_triggers(prompt, [str(spec) for spec in lora_specs])
+                    resolved = resolve_prompt(prompt, iter_seed, base_seed=seed_base)
+                    final_prompt = apply_triggers(resolved.prompt, [str(spec) for spec in lora_specs])
                     name_steps = None if preview else step_count
-                    stem = batch_stem(prompt, width, height, iter_seed, name_steps, strength=img_strength)
+                    stem = batch_stem(
+                        resolved.prompt,
+                        width,
+                        height,
+                        iter_seed,
+                        name_steps,
+                        strength=img_strength,
+                    )
                     output = root / batch_filename(stem, variant)
 
                     step_label = f" s{step_count}" if len(steps_list) > 1 else ""
@@ -247,11 +257,14 @@ def _run_one_batch(
 
                     if dry_run:
                         print(f"→ {model_label}{step_label} → {output}", file=sys.stderr)
-                        if final_prompt != prompt:
+                        if final_prompt != resolved.prompt:
+                            print(f"prompt: {final_prompt}", file=sys.stderr)
+                        elif resolved.template:
                             print(f"prompt: {final_prompt}", file=sys.stderr)
                     jobs.append(
                         {
                             "prompt": final_prompt,
+                            "template": resolved.template,
                             "output": str(output),
                             "seed": iter_seed,
                             "steps": step_count,

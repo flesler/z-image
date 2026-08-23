@@ -120,7 +120,7 @@
     .field-width { grid-column: 1; }
     .field-height { grid-column: 2; }
     .field-count { grid-column: 1; }
-    .field-lora { grid-column: 2; }
+    .field-seed { grid-column: 2; }
     .field-upload { grid-column: 1 / -1; }
 
     .gen-actions {
@@ -186,6 +186,7 @@
         font-size: clamp(0.9rem, 4cqh, 1.2rem);
       }
       #preview-meta { font-size: clamp(0.65rem, 2.5cqh, 0.78rem); }
+      #preview-prompt { font-size: clamp(0.6rem, 2.2cqh, 0.72rem); }
       #empty { font-size: clamp(0.8rem, 3.2cqh, 0.92rem); }
     }
 
@@ -319,7 +320,18 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       padding: 0 1.5em;
-      margin-bottom: 0.75em;
+      margin-bottom: 0.35em;
+      flex-shrink: 0;
+    }
+
+    #preview-prompt {
+      font-size: 0.72em;
+      color: rgba(255,255,255,0.5);
+      text-align: center;
+      max-width: 100%;
+      padding: 0 1.5em 0.75em;
+      margin: 0;
+      line-height: 1.35;
       flex-shrink: 0;
     }
 
@@ -421,9 +433,9 @@
           <input id="count" type="number" min="1" max="50" value="1">
         </label>
 
-        <label class="field field-lora">
-          <span class="field-label">LoRA</span>
-          <input id="lora" type="text" placeholder="name.safetensors:1.0">
+        <label class="field field-seed">
+          <span class="field-label">Seed</span>
+          <input id="seed" type="text" value="random" disabled>
         </label>
 
         <div class="field field-upload">
@@ -462,6 +474,7 @@
           <img id="preview" alt="" class="hidden">
           <p id="empty">No images in gallery yet</p>
           <p id="preview-meta"></p>
+          <p id="preview-prompt" class="hidden"></p>
         </div>
 
         <button type="button" id="next-btn" class="nav-btn" aria-label="Next">›</button>
@@ -510,7 +523,6 @@
         width: $('width').value,
         height: $('height').value,
         count: $('count').value,
-        lora: $('lora').value,
       };
     }
 
@@ -531,7 +543,6 @@
         if (data.width != null) $('width').value = data.width;
         if (data.height != null) $('height').value = data.height;
         if (data.count != null) $('count').value = data.count;
-        if (typeof data.lora === 'string') $('lora').value = data.lora;
       } catch {
         // ignore corrupt storage
       }
@@ -674,6 +685,10 @@
       }
     }
 
+    function updateSeedField() {
+      $('seed').value = lastSeed != null ? String(lastSeed) : 'random';
+    }
+
     function updateControls() {
       const workerBusy = generating;
       const abortable = canAbortQueue();
@@ -697,6 +712,7 @@
       const rightActiveMode = generating && isSecondaryMode(activeGenMode) ? activeGenMode : rightMode;
       updateGenButton(refineBtn, rightActiveMode, rightLabel);
       $('upload-btn').classList.toggle('is-busy', workerBusy);
+      updateSeedField();
     }
 
     function setGenerating(on) {
@@ -716,26 +732,6 @@
 
     function fileUrl(path) {
       return `/gallery/file?path=${encodeURIComponent(path)}`;
-    }
-
-    function formatLorasForForm(loraText) {
-      if (!loraText) return '';
-      return loraText.split(',').map((part) => {
-        const [name, strength] = part.trim().split(':');
-        if (!name) return '';
-        const file = name.endsWith('.safetensors') ? name : `${name}.safetensors`;
-        return strength ? `${file}:${strength}` : file;
-      }).filter(Boolean).join(', ');
-    }
-
-    function parseLoras(text) {
-      const raw = text.trim();
-      if (!raw) return [];
-      return raw.split(',').map((part) => {
-        const [name, strength] = part.trim().split(':');
-        const file = name.endsWith('.safetensors') ? name : `${name}.safetensors`;
-        return { file, strength: strength ? parseFloat(strength) : 1 };
-      });
     }
 
     async function readPngParameters(blob) {
@@ -763,7 +759,17 @@
     function parseGenMeta(raw) {
       if (!raw) return null;
       const promptEnd = raw.indexOf('Negative prompt:');
-      const prompt = (promptEnd >= 0 ? raw.slice(0, promptEnd) : raw.split('\n')[0]).trim();
+      const header = (promptEnd >= 0 ? raw.slice(0, promptEnd) : raw.split('\n')[0]).trimEnd();
+      const headerLines = header.split('\n');
+      const prompt = headerLines[0].trim();
+      let template = null;
+      for (let i = 1; i < headerLines.length; i++) {
+        const line = headerLines[i];
+        if (line.startsWith('Template:')) {
+          template = line.slice('Template:'.length).trim();
+          break;
+        }
+      }
       const info = promptEnd >= 0 ? raw.slice(promptEnd) : '';
       const field = (name) => {
         const m = info.match(new RegExp(`${name}:\\s*([^,\\n]+)`, 'i'));
@@ -779,14 +785,13 @@
       }
       const seedVal = field('Seed');
       const stepsVal = field('Steps');
-      const loraMatch = info.match(/Lora:\s*(.+)$/i);
       return {
         prompt: prompt || null,
+        template,
         width: Number.isFinite(width) ? width : null,
         height: Number.isFinite(height) ? height : null,
         seed: seedVal != null ? parseInt(seedVal, 10) : null,
         steps: stepsVal != null ? parseInt(stepsVal, 10) : null,
-        lora: loraMatch ? loraMatch[1].trim() : '',
       };
     }
 
@@ -799,7 +804,6 @@
         height: parseInt(m[2], 10),
         seed: parseInt(m[3], 10),
         steps: m[4] ? parseInt(m[4], 10) : REFINED_STEPS,
-        lora: '',
       };
     }
 
@@ -811,11 +815,12 @@
 
     function applyGenMeta(meta) {
       if (!meta || generating) return;
-      if (meta.prompt) $('prompt').value = meta.prompt;
+      if (meta.template || meta.prompt) {
+        $('prompt').value = meta.template || meta.prompt;
+      }
       if (meta.width) $('width').value = meta.width;
       if (meta.height) $('height').value = meta.height;
       snapSizeFields();
-      $('lora').value = formatLorasForForm(meta.lora);
       if (meta.seed != null) {
         lastSeed = meta.seed;
         lastGenMode = inferGenMode(meta.steps);
@@ -861,6 +866,17 @@
       imageCache.clear();
     }
 
+    function updateViewerPrompt(meta) {
+      const el = $('preview-prompt');
+      if (meta?.template && meta.prompt) {
+        el.textContent = meta.prompt;
+        el.classList.remove('hidden');
+      } else {
+        el.textContent = '';
+        el.classList.add('hidden');
+      }
+    }
+
     async function loadViewerImage(item) {
       const token = ++viewerToken;
       const img = $('preview');
@@ -886,12 +902,14 @@
       if (token !== viewerToken) return;
       img.src = cached.objectUrl;
       applyGenMeta(cached.meta);
+      updateViewerPrompt(cached.meta);
     }
 
     function showUploadView() {
       const img = $('preview');
       const empty = $('empty');
       const meta = $('preview-meta');
+      const prompt = $('preview-prompt');
       const counter = $('counter');
 
       empty.classList.add('hidden');
@@ -899,6 +917,8 @@
       img.src = uploadSource.objectUrl;
       img.alt = uploadSource.fileName;
       meta.textContent = uploadSource.fileName;
+      prompt.textContent = '';
+      prompt.classList.add('hidden');
       counter.textContent = '';
       counter.classList.add('hidden');
     }
@@ -907,6 +927,7 @@
       const img = $('preview');
       const empty = $('empty');
       const meta = $('preview-meta');
+      const prompt = $('preview-prompt');
       const counter = $('counter');
 
       if (viewingUpload && uploadSource) {
@@ -924,6 +945,8 @@
         clearImageCache();
         empty.classList.remove('hidden');
         meta.textContent = '';
+        prompt.textContent = '';
+        prompt.classList.add('hidden');
         counter.textContent = '';
         return;
       }
@@ -1055,7 +1078,6 @@
       snapSizeFields();
 
       const count = Math.max(1, Math.min(50, parseInt($('count').value, 10) || 1));
-      const loras = parseLoras($('lora').value);
       const steps = mode === 'preview' ? PREVIEW_STEPS : REFINED_STEPS;
       const basePayload = {
         prompt,
@@ -1063,7 +1085,6 @@
         height: parseInt($('height').value, 10),
         steps,
       };
-      if (loras.length) basePayload.loras = loras;
       if (uploadSource?.serverPath) {
         basePayload.image = uploadSource.serverPath;
       }
@@ -1077,6 +1098,7 @@
       try {
         let last = null;
         let done = 0;
+        let seedBase = null;
         for (let i = 0; i < count; i++) {
           if (i > 0 && genAbort) {
             break;
@@ -1087,10 +1109,22 @@
             setStatus(`${label} ${i + 1} of ${count}…`);
           }
           const payload = { ...basePayload };
-          if (mode === 'refined') {
-            payload.seed = lastSeed + i;
+          if (count > 1) {
+            if (i === 0 && mode === 'refined' && lastSeed != null) {
+              payload.seed = lastSeed;
+            } else if (i > 0 && seedBase != null) {
+              payload.seed = seedBase + i;
+            }
+            if (seedBase != null) {
+              payload.seed_base = seedBase;
+            }
+          } else if (mode === 'refined' && lastSeed != null) {
+            payload.seed = lastSeed;
           }
           last = await generateOne(payload);
+          if (seedBase == null) {
+            seedBase = last.seed;
+          }
           lastSeed = last.seed;
           lastGenMode = mode === 'preview' ? 'preview' : 'refined';
           done = i + 1;

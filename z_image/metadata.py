@@ -10,6 +10,7 @@ from PIL.PngImagePlugin import PngInfo
 MODEL_NAME = "Z-Image-Turbo"
 SAMPLER = "Flow Match"
 NEGATIVE_PROMPT_MARKER = "Negative prompt:"
+TEMPLATE_MARKER = "Template:"
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,7 @@ class GenMeta:
     height: int
     seed: int
     steps: int
+    template: str | None = None
     precision: str | None = None
     loras: list[tuple[str, float]] | None = None
     strength: float | None = None
@@ -30,7 +32,10 @@ def _lora_label(path_or_name: str, strength: float) -> str:
 
 
 def build_parameters(meta: GenMeta) -> str:
-    lines = [meta.prompt, "Negative prompt: "]
+    lines = [meta.prompt]
+    if meta.template:
+        lines.append(f"{TEMPLATE_MARKER} {meta.template}")
+    lines.append("Negative prompt: ")
     parts = [
         f"Steps: {meta.steps}",
         f"Sampler: {SAMPLER}",

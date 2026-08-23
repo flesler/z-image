@@ -7,6 +7,7 @@ from .config import apply_env, output_dir, resolve_strength, validate_strength
 from .init_image import load_init_image
 from .loras import LoraSpec, apply_triggers, normalize_prompt, random_seed, resolve_spec
 from .naming import output_filename
+from .templates import resolve_prompt
 from .worker_client import ensure_worker, generate_via_worker
 
 
@@ -28,6 +29,7 @@ def run_generate(
     prompt = normalize_prompt(prompt)
     loras = loras or []
     seed = seed if seed is not None else random_seed()
+    resolved = resolve_prompt(prompt, seed, base_seed=seed)
     img_strength = None
     if image is not None:
         if strength is not None:
@@ -39,7 +41,7 @@ def run_generate(
         out_dir = output_dir()
         out_dir.mkdir(parents=True, exist_ok=True)
         output = out_dir / output_filename(
-            prompt,
+            resolved.prompt,
             width,
             height,
             seed,
@@ -52,21 +54,24 @@ def run_generate(
         print(f"img2img: {image} strength={img_strength:g}", file=sys.stderr)
     print(f"→ {output}", file=sys.stderr)
 
-    resolved: list[LoraSpec] = [resolve_spec(spec) for spec in loras]
-    final_prompt = apply_triggers(prompt, loras) if loras else prompt
+    resolved_loras: list[LoraSpec] = [resolve_spec(spec) for spec in loras]
+    final_prompt = apply_triggers(resolved.prompt, loras) if loras else resolved.prompt
     if loras:
+        print(f"prompt: {final_prompt}", file=sys.stderr)
+    elif resolved.template:
         print(f"prompt: {final_prompt}", file=sys.stderr)
 
     ensure_worker()
     generate_via_worker(
-        prompt=final_prompt,
+        prompt=prompt,
         output=output,
         width=width,
         height=height,
         seed=seed,
+        seed_base=seed,
         steps=steps,
         precision=precision,
-        loras=resolved,
+        loras=resolved_loras,
         image=image,
         strength=img_strength,
     )

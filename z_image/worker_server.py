@@ -39,11 +39,12 @@ from .exceptions import ClientDisconnected
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
 from .init_image import load_init_image
 from .job_monitor import JobMonitor, log_summary
-from .loras import resolve_path
+from .loras import apply_triggers, normalize_prompt, resolve_path
 from .pipeline_cache import IdleGuard, current_pipe
 from .metadata import GenMeta, save_image
 from .pipeline_jobs import generate_one, recover_pipe, run_batch_on_pipe
 from .prompt_embed_cache import prune, remove_legacy_layout
+from .templates import resolve_prompt
 
 apply_env()
 ensure_gpu_pipeline_patch()
@@ -127,7 +128,7 @@ def _seed_from_filename(name: str) -> int | None:
 
 
 def run_generate_job(body: dict) -> dict:
-    prompt = body["prompt"]
+    raw_prompt = normalize_prompt(body["prompt"])
     width = require_vae_aligned(int(body.get("width", 1024)), name="width")
     height = require_vae_aligned(int(body.get("height", 1024)), name="height")
     seed = body.get("seed")
@@ -136,6 +137,13 @@ def run_generate_job(body: dict) -> dict:
     else:
         seed = int(seed)
     body["seed"] = seed
+    seed_base = int(body["seed_base"]) if "seed_base" in body else seed
+    resolved = resolve_prompt(raw_prompt, seed, base_seed=seed_base)
+    prompt = resolved.prompt
+    template = resolved.template
+    lora_entries = body.get("loras", [])
+    if lora_entries:
+        prompt = apply_triggers(prompt, [entry["file"] for entry in lora_entries])
     steps = resolve_steps(body.get("steps"))
     strength = body.get("strength")
     img_strength = float(strength) if strength is not None else None
@@ -211,6 +219,7 @@ def run_generate_job(body: dict) -> dict:
             height=height,
             seed=seed,
             steps=steps,
+            template=template,
             precision=precision,
             loras=loras or None,
             strength=strength,

@@ -72,6 +72,7 @@ def generate_via_worker(
     height: int,
     seed: int,
     steps: int | None = None,
+    seed_base: int | None = None,
     precision: str | None = None,
     loras: list[LoraSpec],
     image: Path | None = None,
@@ -86,6 +87,8 @@ def generate_via_worker(
         "seed": seed,
         "loras": [{"file": spec.file, "strength": spec.strength} for spec in loras],
     }
+    if seed_base is not None:
+        payload["seed_base"] = seed_base
     if steps is not None:
         payload["steps"] = steps
     if precision is not None:
