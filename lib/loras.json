@@ -82,5 +82,49 @@
       "A romantic couple stands hand in hand in a luminous mountain meadow, seen from behind as small, quiet figures surrounded by tall wildflowers and golden atmospheric haze. The woman has long hair and wears a simple light dress or coat, while the man stands beside her in darker clothing, both facing the glowing valley ahead with a calm, intimate posture. In the extreme foreground, a blue butterfly rests among stems and white daisies, its wings open with deep cobalt, turquoise, black, white, and small amber markings. The butterfly partially veils the meadow scene in a natural way, adding depth and a poetic sense of closeness while leaving the couple and landscape clearly readable.  The composition is vertical and cinematic with a strong dutch tilt, placing the butterfly large in the lower foreground and the couple smaller in the upper midground along the diagonal rise of the flower field. The camera sits low among the flowers, creating layered depth from the detailed butterfly and nearby blossoms to the misty mountain valley beyond. The meadow slopes upward through dense red, orange, yellow, coral, and pink wildflowers, guiding the eye toward the couple and the soft glowing sky. Blue mountain walls frame both sides of the image, with a darker rocky peak on the right and pale atmospheric distance opening behind the figures.  The lighting is soft, radiant, and painterly, with warm sunrise or sunset glow spreading through the center of the valley and illuminating the flowers from behind. Cool blue shadows settle into the foreground foliage and mountain forms, while golden cream highlights catch the petals, butterfly wings, and distant mist. The butterfly carries slightly sharper detail and richer contrast than the background, with luminous wing veins and delicate edge highlights. The air feels filled with watercolor bloom, tiny paint speckles, and soft atmospheric diffusion.  The art style is a dreamy watercolor and gouache landscape illustration with visible layered washes, loose expressive brushstrokes, delicate ink-like floral stems, and controlled paint splatter texture. The mountains and sky are rendered with soft watercolor gradients and granulated blue washes, while the meadow uses brighter gouache-like floral marks and textured pigment blooms. The butterfly is painted with more refined illustrative detail, combining crisp wing patterning with painterly edges. The color palette blends cobalt blue, teal, misty cyan, warm cream, golden yellow, poppy red, orange, coral, soft pink, and muted green, creating a romantic, serene, magical atmosphere with strong foreground depth and elegant visual flow",
       "Bradhamel art style, Dabruyanno art style. A surreal digital composition depicts a massive, ornate golden mirror frame floating vertically in an ethereal sky above a parched, cracked earth landscape. The frame, intricately carved with classical flourishes and a warm metallic sheen, serves as a dimensional threshold, reflecting a cosmic vista of a lush, verdant planet against deep teal nebulae and scattered stars. In the foreground, a solitary woman figure in a dark dress stands at the base of a rustic wooden staircase, its simple planks showing visible grain as it ascends from the dusty ground toward the mirror's opening. The composition establishes a clear visual hierarchy, drawing the eye along the path of the stairs from the figure into the celestial reflection, while multiple birds soar in the distant background against billowing white clouds and a gradient sky that transitions from a deep blue zenith to a hazy, sunlit horizon. The lighting is diffuse and purposefully directional, emanating from behind the mirror to create a dreamlike, backlit glow that casts soft shadows on the uneven terrain. Rendered in a painterly digital style with soft edges, the scene utilizes a sophisticated color grade that juxtaposes the cool, celestial tones of the cosmos with the warm, saturated hues of the golden frame and the earthy browns of the cracked ground."
     ]
+  },
+  "CandidInstaxphotoZ.safetensors": {
+    "url": "https://civitai.com/models/1683324?modelVersionId=2597365",
+    "trigger": "Candid Instax Photo",
+    "default_strength": 0.8,
+    "prompts": [
+      "The image is a photograph of two people sitting on a rooftop facing away from the camera. The sky is filled with vibrant orange and pink hues with the sun setting in the background. The clouds are scattered across the sky creating a beautiful contrast with the warm colors of the sky. The people are silhouetted against the horizon with their backs to the camera and they appear to be looking out at the city below. The rooftop is surrounded by buildings and trees and there is a street lamp visible on the right side of the image. The image is taken from a low angle giving a sense of depth and perspective.",
+      "The image is a polaroid photograph of two young women posing for a photo together. They are standing close with playful candid smiles, soft flash lighting, and the characteristic Instax Mini white border framing the scene.",
+      "The image is a close-up of a small dog wearing a yellow hoodie. The dog appears to be a Chihuahua with expressive eyes, captured in a spontaneous instant-film snapshot with soft focus and gentle color shifts.",
+      "The image shows four young women jumping in the air with their arms raised in celebration. They are caught mid-motion in a flash-heavy candid snapshot with nostalgic Instax Mini coloring and spontaneous energy."
+    ]
+  },
+  "Retro80sVaporwaveZ.safetensors": {
+    "url": "https://civitai.com/models/1989095/retro-80s-vaporwave?modelVersionId=2473042",
+    "trigger": "Retro 80s Vaporwave",
+    "default_strength": 0.8,
+    "prompts": [
+      "The image shows a cup of coffee sitting on top of a saucer with a colorful background. The cup is filled with a steaming hot beverage likely coffee and there are coffee beans scattered around it.",
+      "A bold, vibrant 1980s-style graphic featuring neon gradients, chrome accents, and retro typography against a synthwave sunset skyline.",
+      "Night photo of a young woman leaning against a glowing gas pump at 2 AM, pink and cyan neon reflections on wet pavement, vaporwave mood.",
+      "A cat wearing sunglasses and a jacket with a colorful retro background, bold 80s palette, glowing highlights, and playful vaporwave composition."
+    ]
+  },
+  "TinyThings2ZIT.safetensors": {
+    "url": "https://civitai.com/models/2313869/tiny-things?modelVersionId=2611795",
+    "trigger": "TinyDaal",
+    "default_strength": 1.0,
+    "prompts": [
+      "A minuscule green-skinned elf-eared alien sits cross-legged in serene meditation, its head replaced by a translucent blue glass brain model with visible glaze cracks and luminous white tendrils stitching its torso; intricate silver filaments of jewelry, including a central pendant and arm bands with hand-stitched seams, dangle from its fragile form. Four miniature swords with tarnished silver hilts and thin blades hover dynamically, their edges catching dust motes, alongside jagged shards of blue crystal with porous interiors and faint rust stains resting on a base of fractured crystalline structures. The vast cosmic background features distant, softly swirling nebulae of matte blue dust fields and silent, indifferent black voids, all rendered in high detail with visible fiber strands and micro-cracks across every surface. Dominant colors of electric blue glaze, vibrant moss green skin, and deep black void evoke a poetic stillness, where every element—cracks in the brain casing, oxidized silver, and the alien's porous skin textures—holds equal weight to the delicate pose.",
+      "Tiny robot miniature perched on a colossal concrete ledge, extreme macro eye-level view, exaggeratedly small cube form with peeling paint and dust, vast empty cityscape fading into soft bokeh.",
+      "Tiny handcrafted figure standing upright against a textured vertical surface, spherical black head with minuscule yellow eyes, stitched fabric body, wire limbs, shallow depth of field, muted desaturated palette.",
+      "Tiny demon child carved from dark resin and wire crouched at the edge of a massive ink spill that reads as a black ocean, smooth round horns, fragile miniature scale against an indifferent vast background."
+    ]
+  },
+  "StorybookFolkArtZ.safetensors": {
+    "url": "https://civitai.com/models/1321740/storybook-folk-art?modelVersionId=2507592",
+    "trigger": "4rt. Whimsical, storybook-inspired folk art with flowing, dreamlike details.",
+    "default_strength": 0.8,
+    "prompts": [
+      "A wild-haired pianist in tails leans so far back at the Steinway that his top-hat tumbles away, closed eyelids fluttering with ecstatic tears that sparkle like tiny chandeliers across his flushed cheeks, while his gloved fingers whip ivory keys into a swirling vortex of sheet-music pages that spiral upward, each page blooming into gold-foil songbirds fluttering among the crimson-velvet balconies of a cavernous hall whose gilded rafters melt into flowing staffs of star-dotted musical notation.",
+      "A cracked overhead sign looping in hand-painted flowing script: better living through chemistry. A bloated, tumor-riddled leviathan lunges across a cracked virology bay floor, rendered in whimsical flowing folk-art linework.",
+      "Luke Skywalker, sweat-slicked brow glistening, grips a chipped machete and hacks a swath through emerald vines, his fierce blue eyes darting for jungle threats, storybook folk-art textures and dreamlike flowing details throughout the scene.",
+      "A young man with wild eyes burning like coals sprints through a shifting virtual world, his face locked in fierce determination, wearing a sleek haptic suit that pulses with light, whimsical illustrated folk-art atmosphere."
+    ]
   }
 }
