@@ -85,7 +85,6 @@
     }
 
     .title { font-size: 1.35em; font-weight: 600; letter-spacing: -0.02em; }
-    .subtitle { font-size: 0.78em; color: rgba(255,255,255,0.45); margin-top: 0.2em; }
     .field-label {
       display: block;
       font-size: 0.72em;
@@ -156,7 +155,6 @@
 
     @container form (min-height: 0) {
       .title { font-size: clamp(0.9rem, 4.5cqh, 1.35rem); }
-      .subtitle { font-size: clamp(0.65rem, 2.8cqh, 0.78rem); }
       .field-label { font-size: clamp(0.6rem, 2.5cqh, 0.72rem); }
       #gen-form { gap: clamp(0.4em, 1.8cqh, 0.65em); }
       #gen-form input:not([type="file"]),
@@ -503,7 +501,6 @@
     <section class="panel form-panel">
       <div class="form-header">
         <h1 class="title">z-image</h1>
-        <p class="subtitle">Generate from the warm worker</p>
       </div>
 
       <form id="gen-form">
@@ -702,7 +699,7 @@
         prompt: (meta.template || meta.prompt || '').trim(),
         width: meta.width != null ? snapDim(meta.width) : null,
         height: meta.height != null ? snapDim(meta.height) : null,
-        lora: meta.lora ?? null,
+        lora: meta.loraKnown ? (meta.lora ?? null) : null,
       };
     }
 
@@ -1003,15 +1000,34 @@
       return out;
     }
 
+    function slugifyLora(text) {
+      return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 150);
+    }
+
+    function resolveLoraName(nameOrSlug) {
+      if (!nameOrSlug) {
+        return null;
+      }
+      const trimmed = nameOrSlug.trim();
+      const exact = loraCatalog.find((entry) => entry.name === trimmed);
+      if (exact) {
+        return exact.name;
+      }
+      const slug = slugifyLora(trimmed);
+      const bySlug = loraCatalog.find((entry) => slugifyLora(entry.name) === slug);
+      return bySlug ? bySlug.name : null;
+    }
+
     function setLoraFromMeta(loraName) {
       const select = $('lora');
-      if (!loraName) {
+      const resolved = resolveLoraName(loraName);
+      if (!resolved) {
         select.value = '';
       } else {
         const match = [...select.options].find(
-          (opt) => opt.value === loraName && !opt.disabled,
+          (opt) => opt.value === resolved && !opt.disabled,
         );
-        select.value = match ? loraName : '';
+        select.value = match ? resolved : '';
       }
       const entry = select.value ? loraCatalog.find((item) => item.name === select.value) : null;
       syncExampleDropdown(entry);
@@ -1101,9 +1117,14 @@
     }
 
     function parseGenMeta(raw) {
-      if (!raw) return null;
+      if (!raw) {
+        return null;
+      }
       const promptEnd = raw.indexOf('Negative prompt:');
-      const header = (promptEnd >= 0 ? raw.slice(0, promptEnd) : raw.split('\n')[0]).trimEnd();
+      if (promptEnd < 0) {
+        return null;
+      }
+      const header = raw.slice(0, promptEnd).trimEnd();
       const headerLines = header.split('\n');
       const prompt = headerLines[0].trim();
       let template = null;
@@ -1114,7 +1135,7 @@
           break;
         }
       }
-      const info = promptEnd >= 0 ? raw.slice(promptEnd) : '';
+      const info = raw.slice(promptEnd);
       const field = (name) => {
         const m = info.match(new RegExp(`${name}:\\s*([^,\\n]+)`, 'i'));
         return m ? m[1].trim() : null;
@@ -1129,6 +1150,7 @@
       }
       const seedVal = field('Seed');
       const stepsVal = field('Steps');
+      const loraKnown = /(?:^|[\n,])\s*LoRA:\s*/i.test(info);
       const loraRaw = field('LoRA');
       const lora = loraRaw ? loraRaw.split(',')[0].trim() : null;
       return {
@@ -1138,7 +1160,8 @@
         height: Number.isFinite(height) ? height : null,
         seed: seedVal != null ? parseInt(seedVal, 10) : null,
         steps: stepsVal != null ? parseInt(stepsVal, 10) : null,
-        lora: lora || null,
+        lora,
+        loraKnown,
       };
     }
 
@@ -1156,7 +1179,6 @@
         width: parseInt(sizeMatch[1], 10),
         height: parseInt(sizeMatch[2], 10),
         seed: parseInt(seedMatch[1], 10),
-        lora: null,
       };
     }
 
@@ -1199,23 +1221,30 @@
       if (meta.height) {
         $('height').value = meta.height;
       }
-      setLoraFromMeta(meta.lora ?? null);
+      if (meta.loraKnown) {
+        setLoraFromMeta(meta.lora);
+      }
       snapSizeFields();
     }
 
     async function extractMetaFromBlob(blob, filename) {
-      let meta = null;
+      let fromPng = null;
       if (filename.toLowerCase().endsWith('.png')) {
-        meta = parseGenMeta(await readPngParameters(blob));
+        fromPng = parseGenMeta(await readPngParameters(blob));
       }
       const fallback = parseFilenameMeta(filename);
-      if (fallback) {
-        meta = {
-          ...fallback,
-          ...meta,
-          prompt: meta?.prompt ?? fallback.prompt,
-          seed: meta?.seed ?? fallback.seed,
-        };
+      if (!fromPng && !fallback) {
+        return null;
+      }
+      const meta = {
+        ...(fallback || {}),
+        ...(fromPng || {}),
+        prompt: fromPng?.prompt ?? fallback?.prompt ?? null,
+        seed: fromPng?.seed ?? fallback?.seed ?? null,
+      };
+      if (fromPng?.loraKnown) {
+        meta.lora = resolveLoraName(fromPng.lora);
+        meta.loraKnown = true;
       }
       return meta;
     }
