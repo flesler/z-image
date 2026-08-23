@@ -15,8 +15,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from zimage.paths import get_loras_dir
-
 from .config import (
     ROOT,
     apply_env,
@@ -24,6 +22,7 @@ from .config import (
     ensure_gpu_pipeline_patch,
     idle_unload_minutes,
     load_pipeline,
+    loras_dir,
     resolve_precision,
     resolve_steps,
     resolve_strength,
@@ -49,7 +48,7 @@ from .templates import resolve_prompt
 
 apply_env()
 ensure_gpu_pipeline_patch()
-LORAS_DIR = get_loras_dir()
+LORAS_DIR = loras_dir()
 _idle_guard = IdleGuard()
 WEB_UI = ROOT / "web" / "index.html"
 _gpu_lock = threading.RLock()

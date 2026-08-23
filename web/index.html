@@ -512,12 +512,12 @@
 
         <label class="field field-width has-tip" data-tip="Output width in pixels. Snaps to multiples of 16 (VAE).">
           <span class="field-label">Width</span>
-          <input id="width" type="number" min="256" max="4096" step="16" value="1024">
+          <input id="width" type="number" min="256" max="4096" step="1" value="1024">
         </label>
 
         <label class="field field-height has-tip" data-tip="Output height in pixels. Snaps to multiples of 16 (VAE).">
           <span class="field-label">Height</span>
-          <input id="height" type="number" min="256" max="4096" step="16" value="1024">
+          <input id="height" type="number" min="256" max="4096" step="1" value="1024">
         </label>
 
         <label class="field field-count has-tip" data-tip="Images per run. Each uses the next seed; templates advance one variant per image.">
@@ -622,9 +622,19 @@
       return Math.max(VAE_ALIGN, Math.round(n / VAE_ALIGN) * VAE_ALIGN);
     }
 
+    function snapSizeField(field) {
+      field.value = snapDim(field.value);
+    }
+
     function snapSizeFields() {
-      $('width').value = snapDim($('width').value);
-      $('height').value = snapDim($('height').value);
+      snapSizeField($('width'));
+      snapSizeField($('height'));
+    }
+
+    function onSizeBlur(field) {
+      snapSizeField(field);
+      onFormContextChange();
+      updatePortraitLayout();
     }
 
     function readFormState() {
@@ -1560,7 +1570,6 @@
     }
 
     function onFormContextChange() {
-      snapSizeFields();
       updateControls();
     }
 
@@ -1687,8 +1696,8 @@
     $('lora').addEventListener('change', () => { saveFormState(); onFormContextChange(); });
     $('width').addEventListener('input', onFormContextChange);
     $('height').addEventListener('input', onFormContextChange);
-    $('width').addEventListener('change', () => { onFormContextChange(); updatePortraitLayout(); });
-    $('height').addEventListener('change', () => { onFormContextChange(); updatePortraitLayout(); });
+    $('width').addEventListener('blur', () => onSizeBlur($('width')));
+    $('height').addEventListener('blur', () => onSizeBlur($('height')));
     window.addEventListener('resize', updatePortraitLayout);
     window.addEventListener('scroll', () => {
       syncPortraitPanel();
