@@ -29,7 +29,7 @@ def run_generate(
     prompt = normalize_prompt(prompt)
     loras = loras or []
     seed = seed if seed is not None else random_seed()
-    resolved = resolve_prompt(prompt, seed, base_seed=seed)
+    resolved = resolve_prompt(prompt, seed)
     img_strength = None
     if image is not None:
         if strength is not None:

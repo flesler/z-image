@@ -137,7 +137,7 @@ def run_generate_job(body: dict) -> dict:
     else:
         seed = int(seed)
     body["seed"] = seed
-    seed_base = int(body["seed_base"]) if "seed_base" in body else seed
+    seed_base = int(body["seed_base"]) if "seed_base" in body else None
     resolved = resolve_prompt(raw_prompt, seed, base_seed=seed_base)
     prompt = resolved.prompt
     template = resolved.template

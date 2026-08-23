@@ -439,7 +439,7 @@
         </label>
 
         <div class="field field-upload">
-          <span class="field-label">Upload image</span>
+          <span class="field-label">From image</span>
           <label id="upload-btn" class="upload-btn">
             <input id="upload" type="file" accept="image/*">
             <span id="upload-label">Choose image…</span>
@@ -495,14 +495,12 @@
     let lastGenMode = null;
     let activeGenMode = null;
     let viewerToken = 0;
-    let uploadSource = null;
-    let viewingUpload = false;
-    let galleryIndexBeforeUpload = 0;
     const imageCache = new Map();
 
     const PREVIEW_STEPS = 3;
     const REFINED_STEPS = 8;
     const VAE_ALIGN = 16;
+    const MAX_DUP_ATTEMPTS = 50;
     const FORM_STORAGE_KEY = 'z-image-form';
     let portraitPanel = 0;
     let touchStartY = 0;
@@ -689,6 +687,32 @@
       $('seed').value = lastSeed != null ? String(lastSeed) : 'random';
     }
 
+    function usesNextSeed(mode) {
+      return mode === 'preview' || mode === 'generate';
+    }
+
+    function startSeedForMode(mode) {
+      if (lastSeed == null) {
+        return null;
+      }
+      if (usesNextSeed(mode)) {
+        return lastSeed + 1;
+      }
+      if (mode === 'refined') {
+        return lastSeed;
+      }
+      return null;
+    }
+
+    function applySeedToPayload(payload, { seed, seedBase }) {
+      if (seed != null) {
+        payload.seed = seed;
+      }
+      if (seedBase != null) {
+        payload.seed_base = seedBase;
+      }
+    }
+
     function updateControls() {
       const workerBusy = generating;
       const abortable = canAbortQueue();
@@ -852,13 +876,6 @@
       });
     }
 
-    function clearUploadSource() {
-      if (!uploadSource) return;
-      URL.revokeObjectURL(uploadSource.objectUrl);
-      uploadSource = null;
-      viewingUpload = false;
-    }
-
     function clearImageCache() {
       for (const entry of imageCache.values()) {
         URL.revokeObjectURL(entry.objectUrl);
@@ -905,36 +922,12 @@
       updateViewerPrompt(cached.meta);
     }
 
-    function showUploadView() {
-      const img = $('preview');
-      const empty = $('empty');
-      const meta = $('preview-meta');
-      const prompt = $('preview-prompt');
-      const counter = $('counter');
-
-      empty.classList.add('hidden');
-      img.classList.remove('hidden');
-      img.src = uploadSource.objectUrl;
-      img.alt = uploadSource.fileName;
-      meta.textContent = uploadSource.fileName;
-      prompt.textContent = '';
-      prompt.classList.add('hidden');
-      counter.textContent = '';
-      counter.classList.add('hidden');
-    }
-
     function updateViewer({ scrollGallery = false } = {}) {
       const img = $('preview');
       const empty = $('empty');
       const meta = $('preview-meta');
       const prompt = $('preview-prompt');
       const counter = $('counter');
-
-      if (viewingUpload && uploadSource) {
-        showUploadView();
-        if (scrollGallery) scrollToGallery();
-        return;
-      }
 
       counter.classList.remove('hidden');
 
@@ -962,14 +955,6 @@
     }
 
     function step(delta) {
-      if (viewingUpload) {
-        viewingUpload = false;
-        if (images.length) {
-          index = galleryIndexBeforeUpload;
-        }
-        updateViewer({ scrollGallery: true });
-        return;
-      }
       if (!images.length) return;
       index = (index + delta + images.length) % images.length;
       updateViewer({ scrollGallery: true });
@@ -977,14 +962,12 @@
 
     function goFirst() {
       if (!images.length) return;
-      viewingUpload = false;
       index = 0;
       updateViewer({ scrollGallery: true });
     }
 
     function goLast() {
       if (!images.length) return;
-      viewingUpload = false;
       index = images.length - 1;
       updateViewer({ scrollGallery: true });
     }
@@ -1000,8 +983,26 @@
       return false;
     }
 
+    function hasShortcutModifier(e) {
+      return e.ctrlKey || e.metaKey || e.altKey || e.shiftKey;
+    }
+
+    function isSubmitChord(e) {
+      return e.key === 'Enter' && (e.ctrlKey || e.metaKey || e.altKey);
+    }
+
+    async function submitGeneration() {
+      if (generating) {
+        return;
+      }
+      if (canRefine()) {
+        await runGeneration('refined');
+      } else {
+        await runGeneration('preview');
+      }
+    }
+
     function focusImage(path, { scrollGallery = true } = {}) {
-      viewingUpload = false;
       const existing = images.findIndex((item) => item.path === path);
       if (existing >= 0) {
         index = existing;
@@ -1032,7 +1033,17 @@
       updateViewer({ scrollGallery });
     }
 
-    async function generateOne(payload) {
+    async function revealInGallery(path) {
+      const stale = imageCache.get(path);
+      if (stale) {
+        URL.revokeObjectURL(stale.objectUrl);
+        imageCache.delete(path);
+      }
+      await loadGallery({ keepPath: path });
+      focusImage(path);
+    }
+
+    async function generateOne(payload, { focus = true } = {}) {
       const res = await fetch('/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1040,14 +1051,8 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generation failed');
-      if (data.gallery_path) {
-        const stale = imageCache.get(data.gallery_path);
-        if (stale) {
-          URL.revokeObjectURL(stale.objectUrl);
-          imageCache.delete(data.gallery_path);
-        }
-        await loadGallery({ keepPath: data.gallery_path });
-        focusImage(data.gallery_path);
+      if (focus && data.gallery_path) {
+        await revealInGallery(data.gallery_path);
       }
       return data;
     }
@@ -1077,7 +1082,9 @@
       saveFormState();
       snapSizeFields();
 
-      const count = Math.max(1, Math.min(50, parseInt($('count').value, 10) || 1));
+      const count = mode === 'refined'
+        ? 1
+        : Math.max(1, Math.min(50, parseInt($('count').value, 10) || 1));
       const steps = mode === 'preview' ? PREVIEW_STEPS : REFINED_STEPS;
       const basePayload = {
         prompt,
@@ -1085,9 +1092,6 @@
         height: parseInt($('height').value, 10),
         steps,
       };
-      if (uploadSource?.serverPath) {
-        basePayload.image = uploadSource.serverPath;
-      }
 
       genAbort = false;
       activeGenMode = mode;
@@ -1098,7 +1102,11 @@
       try {
         let last = null;
         let done = 0;
-        let seedBase = null;
+        let nextSeed = startSeedForMode(mode);
+        const batchSeedBase = count > 1 && nextSeed != null ? nextSeed : null;
+        let randomBatchBase = null;
+        let openedExisting = false;
+
         for (let i = 0; i < count; i++) {
           if (i > 0 && genAbort) {
             break;
@@ -1108,37 +1116,66 @@
             updateControls();
             setStatus(`${label} ${i + 1} of ${count}…`);
           }
-          const payload = { ...basePayload };
-          if (count > 1) {
-            if (i === 0 && mode === 'refined' && lastSeed != null) {
-              payload.seed = lastSeed;
-            } else if (i > 0 && seedBase != null) {
-              payload.seed = seedBase + i;
+
+          let slotDone = false;
+          for (let attempt = 0; attempt < MAX_DUP_ATTEMPTS; attempt++) {
+            const payload = { ...basePayload };
+            let trySeed = nextSeed;
+            if (trySeed == null && i > 0 && randomBatchBase != null) {
+              trySeed = randomBatchBase + i;
             }
-            if (seedBase != null) {
-              payload.seed_base = seedBase;
+            applySeedToPayload(payload, {
+              seed: trySeed,
+              seedBase: batchSeedBase ?? (i > 0 ? randomBatchBase : null),
+            });
+
+            last = await generateOne(payload, { focus: false });
+
+            if (mode === 'refined') {
+              if (last.gallery_path) {
+                await revealInGallery(last.gallery_path);
+              }
+              openedExisting = Boolean(last.skipped);
+              lastSeed = last.seed;
+              nextSeed = last.seed + 1;
+              slotDone = true;
+              break;
             }
-          } else if (mode === 'refined' && lastSeed != null) {
-            payload.seed = lastSeed;
+
+            if (last.skipped) {
+              nextSeed = (trySeed ?? last.seed) + 1;
+              continue;
+            }
+
+            if (last.gallery_path) {
+              await revealInGallery(last.gallery_path);
+            }
+            lastSeed = last.seed;
+            nextSeed = last.seed + 1;
+            if (randomBatchBase == null && i === 0 && trySeed == null) {
+              randomBatchBase = last.seed;
+            }
+            slotDone = true;
+            break;
           }
-          last = await generateOne(payload);
-          if (seedBase == null) {
-            seedBase = last.seed;
+
+          if (!slotDone) {
+            throw new Error('Could not find an unused seed');
           }
-          lastSeed = last.seed;
+
           lastGenMode = mode === 'preview' ? 'preview' : 'refined';
           done = i + 1;
         }
+
         if (genAbort) {
           setStatus(`Stopped after ${done} of ${count} · seed ${last?.seed ?? '—'}`);
-        } else if (last?.skipped) {
-          setStatus(`Already exists · seed ${last.seed}`);
+        } else if (openedExisting && count === 1) {
+          setStatus(`Opened existing · seed ${last.seed}`);
         } else if (count > 1) {
           setStatus(`${label} done ${count} images · seed ${last.seed}`);
         } else {
           setStatus(`${label} done in ${last.elapsed_s}s · seed ${last.seed}`);
         }
-        clearUploadSource();
         scrollToGallery();
       } catch (err) {
         setStatus(err.message, true);
@@ -1156,9 +1193,7 @@
 
     async function onSubmit(e) {
       e.preventDefault();
-      if (!generating) {
-        await runGeneration('preview');
-      }
+      await submitGeneration();
     }
 
     async function onUpload(e) {
@@ -1166,36 +1201,41 @@
       e.target.value = '';
       if (!file || generating) return;
 
+      const uploadBtn = $('upload-btn');
+      uploadBtn.classList.add('is-busy');
       try {
-        clearUploadSource();
-        galleryIndexBeforeUpload = index;
-
-        const objectUrl = URL.createObjectURL(file);
         let meta = await extractMetaFromBlob(file, file.name);
-        const dims = await imageSizeFromUrl(objectUrl);
         meta = meta || {};
-        if (!meta.width) meta.width = dims.width;
-        if (!meta.height) meta.height = dims.height;
 
-        const fd = new FormData();
-        fd.append('image', file);
-        const res = await fetch('/upload', { method: 'POST', body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        if (!meta.width || !meta.height) {
+          const objectUrl = URL.createObjectURL(file);
+          try {
+            const dims = await imageSizeFromUrl(objectUrl);
+            if (!meta.width) meta.width = dims.width;
+            if (!meta.height) meta.height = dims.height;
+          } finally {
+            URL.revokeObjectURL(objectUrl);
+          }
+        }
 
-        uploadSource = {
-          objectUrl,
-          serverPath: data.path,
-          meta,
-          fileName: file.name,
-        };
-        viewingUpload = true;
+        if (!meta.template && !meta.prompt) {
+          setStatus('Captioning…');
+          const capFd = new FormData();
+          capFd.append('image', file);
+          const capRes = await fetch('/caption/upload', { method: 'POST', body: capFd });
+          const capData = await capRes.json();
+          if (!capRes.ok) throw new Error(capData.error || 'Caption failed');
+          meta.prompt = capData.caption;
+          setStatus(capData.source === 'metadata' ? 'Loaded from image metadata' : 'Captioned from image');
+        } else {
+          setStatus('Loaded from image metadata');
+        }
+
         applyGenMeta(meta);
-        updateViewer({ scrollGallery: true });
-        setStatus(meta.prompt ? 'Loaded from image metadata' : 'Image ready');
       } catch (err) {
-        clearUploadSource();
         setStatus(err.message, true);
+      } finally {
+        uploadBtn.classList.remove('is-busy');
       }
     }
 
@@ -1227,7 +1267,14 @@
         return;
       }
 
+      if (isSubmitChord(e)) {
+        e.preventDefault();
+        submitGeneration();
+        return;
+      }
+
       if (isFormFieldFocused()) return;
+      if (hasShortcutModifier(e)) return;
 
       const key = e.key.toLowerCase();
       if (key === 'p') {

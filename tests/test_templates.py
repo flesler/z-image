@@ -50,6 +50,10 @@ class TemplateTests(unittest.TestCase):
             },
         )
 
+    def test_incrementing_seeds_cycle_without_base(self) -> None:
+        prompts = [resolve_prompt(EXAMPLE, seed).prompt for seed in range(1049160638, 1049160644)]
+        self.assertEqual(len(set(prompts)), 6)
+
     def test_leftmost_group_changes_fastest(self) -> None:
         resolved = resolve_prompt(EXAMPLE, 100, base_seed=100)
         self.assertEqual(resolved.prompt, "photo of a man eating an apple")

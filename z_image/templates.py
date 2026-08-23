@@ -50,8 +50,11 @@ def resolve_prompt(text: str, seed: int, *, base_seed: int | None = None) -> Res
     if not groups:
         return ResolvedPrompt(template=None, prompt=text)
 
-    base = seed if base_seed is None else base_seed
-    offset = (seed - base) % combo_count(groups)
+    total = combo_count(groups)
+    if base_seed is None:
+        offset = seed % total
+    else:
+        offset = (seed - base_seed) % total
     indices: list[int] = []
     for group in groups:
         indices.append(offset % len(group))
