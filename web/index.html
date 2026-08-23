@@ -1031,35 +1031,42 @@
       }
     }
 
-    function tabUnfocused() {
-      return document.hidden || !document.hasFocus();
+    let doneAudioCtx = null;
+
+    function unlockDoneAudio() {
+      if (!doneAudioCtx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) {
+          return;
+        }
+        doneAudioCtx = new AudioCtx();
+      }
+      if (doneAudioCtx.state === 'suspended') {
+        void doneAudioCtx.resume();
+      }
     }
 
-    function tryRequestNotificationPermission() {
-      if (!window.isSecureContext || !('Notification' in window)) {
+    function playDoneSound() {
+      if (!doneAudioCtx) {
+        unlockDoneAudio();
+      }
+      if (!doneAudioCtx || doneAudioCtx.state !== 'running') {
         return;
       }
-      if (Notification.permission !== 'default') {
-        return;
-      }
-      void Notification.requestPermission();
-    }
-
-    function notifyIfUnfocused(message) {
-      if (!message || !tabUnfocused()) {
-        return;
-      }
-      if (!('Notification' in window) || Notification.permission !== 'granted') {
-        return;
-      }
-      try {
-        const notification = new Notification(message, { tag: 'z-image-gen' });
-        notification.onclick = () => {
-          window.focus();
-          notification.close();
-        };
-      } catch {
-        // unsupported or blocked
+      const t0 = doneAudioCtx.currentTime;
+      const peak = 0.38;
+      for (const [i, freq] of [[0, 660], [1, 880]]) {
+        const osc = doneAudioCtx.createOscillator();
+        const gain = doneAudioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, t0 + i * 0.12);
+        gain.gain.exponentialRampToValueAtTime(peak, t0 + i * 0.12 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.12 + 0.18);
+        osc.connect(gain);
+        gain.connect(doneAudioCtx.destination);
+        osc.start(t0 + i * 0.12);
+        osc.stop(t0 + i * 0.12 + 0.2);
       }
     }
 
@@ -1620,7 +1627,7 @@
       const prompt = $('prompt').value.trim();
       if (!prompt) return;
 
-      tryRequestNotificationPermission();
+      unlockDoneAudio();
 
       saveFormState();
       snapSizeFields();
@@ -1735,11 +1742,11 @@
           statusTip = { timing: last.timing, totalS: last.elapsed_s };
         }
         setStatus(statusMsg, false, statusTip);
-        notifyIfUnfocused(statusMsg);
+        playDoneSound();
         scrollToGallery();
       } catch (err) {
         setStatus(err.message, true);
-        notifyIfUnfocused(err.message);
+        playDoneSound();
       } finally {
         genAbort = false;
         genProgress = null;
@@ -1927,8 +1934,6 @@
 
     $('gen-form').addEventListener('submit', onSubmit);
     $('delete-btn').addEventListener('click', onDeleteClick);
-    $('preview-btn').addEventListener('pointerdown', tryRequestNotificationPermission);
-    $('refine-btn').addEventListener('pointerdown', tryRequestNotificationPermission);
     $('preview-btn').addEventListener('click', () => runGeneration('preview'));
     $('refine-btn').addEventListener('click', () => runSecondary());
     $('upload').addEventListener('change', onUpload);
