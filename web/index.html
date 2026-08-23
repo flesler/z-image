@@ -100,7 +100,7 @@
       min-height: 0;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      grid-template-rows: minmax(0, 1fr) repeat(5, auto);
+      grid-template-rows: minmax(0, 1fr) repeat(6, auto);
       gap: 0.65em;
       margin-top: 0.65em;
       overflow: hidden;
@@ -116,6 +116,8 @@
       display: flex;
       flex-direction: column;
     }
+
+    .field-lora { grid-column: 1 / -1; }
 
     .field-width { grid-column: 1; }
     .field-height { grid-column: 2; }
@@ -528,6 +530,13 @@
           <input id="seed" type="text" value="random" placeholder="random (-1)" inputmode="numeric" autocomplete="off">
         </label>
 
+        <label class="field field-lora has-tip" data-tip="Optional style adapter from the LoRA catalog. Strength uses each entry's default from lib/loras.json.">
+          <span class="field-label">LoRA</span>
+          <select id="lora">
+            <option value="">None</option>
+          </select>
+        </label>
+
         <div class="field field-upload">
           <span class="field-label">From image</span>
           <label id="upload-btn" class="upload-btn has-tip tip-below" data-tip="Caption the image and fill prompt + size. Does not run img2img.">
@@ -603,6 +612,7 @@
     const VAE_ALIGN = 16;
     const MAX_DUP_ATTEMPTS = 50;
     const FORM_STORAGE_KEY = 'z-image-form';
+    let loraCatalog = [];
     let portraitPanel = 0;
     let touchStartY = 0;
     let deleteSkipConfirm = false;
@@ -620,6 +630,7 @@
     function readFormState() {
       return {
         prompt: $('prompt').value,
+        lora: $('lora').value,
         width: $('width').value,
         height: $('height').value,
         count: $('count').value,
@@ -1210,7 +1221,7 @@
     function isFormFieldFocused() {
       const el = document.activeElement;
       if (!el) return false;
-      if (el.tagName === 'TEXTAREA') return true;
+      if (el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return true;
       if (el.tagName === 'INPUT') {
         const type = el.type;
         return type === 'text' || type === 'number' || type === 'search' || type === '';
@@ -1260,6 +1271,57 @@
         index = 0;
       }
       await updateViewer({ scrollGallery });
+    }
+
+    async function loadLoras() {
+      const res = await fetch('/loras');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load LoRAs');
+      loraCatalog = data.loras || [];
+      const select = $('lora');
+      const saved = (() => {
+        try {
+          const raw = localStorage.getItem(FORM_STORAGE_KEY);
+          return raw ? JSON.parse(raw).lora : '';
+        } catch {
+          return '';
+        }
+      })();
+      select.innerHTML = '<option value="">None</option>';
+      for (const entry of loraCatalog) {
+        const opt = document.createElement('option');
+        opt.value = entry.file;
+        let label = entry.name;
+        if (entry.trigger) {
+          label += ` — ${entry.trigger}`;
+        }
+        if (!entry.available) {
+          label += ' (missing)';
+          opt.disabled = true;
+        }
+        opt.textContent = label;
+        select.appendChild(opt);
+      }
+      if (typeof saved === 'string') {
+        const match = [...select.options].find((opt) => opt.value === saved && !opt.disabled);
+        if (match) {
+          select.value = saved;
+        }
+      }
+    }
+
+    function selectedLoraPayload() {
+      const file = $('lora').value;
+      if (!file) {
+        return null;
+      }
+      const entry = loraCatalog.find((item) => item.file === file);
+      if (!entry || !entry.available) {
+        return null;
+      }
+      return {
+        loras: [{ file: entry.file, strength: entry.default_strength }],
+      };
     }
 
     async function loadGallery({ keepPath, scrollGallery = false } = {}) {
@@ -1344,6 +1406,7 @@
         width: parseInt($('width').value, 10),
         height: parseInt($('height').value, 10),
         steps,
+        ...selectedLoraPayload(),
       };
 
       genAbort = false;
@@ -1621,6 +1684,7 @@
     $('next-btn').addEventListener('click', () => step(1));
     $('scroll-jump-btn').addEventListener('click', onScrollJumpClick);
     $('prompt').addEventListener('input', onFormContextChange);
+    $('lora').addEventListener('change', () => { saveFormState(); onFormContextChange(); });
     $('width').addEventListener('input', onFormContextChange);
     $('height').addEventListener('input', onFormContextChange);
     $('width').addEventListener('change', () => { onFormContextChange(); updatePortraitLayout(); });
@@ -1695,7 +1759,9 @@
     initTooltips();
     updateControls();
     updatePortraitLayout();
-    loadGallery().catch((err) => setStatus(err.message, true));
+    loadLoras()
+      .catch((err) => setStatus(err.message, true))
+      .finally(() => loadGallery().catch((err) => setStatus(err.message, true)));
   </script>
 </body>
 </html>

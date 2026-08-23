@@ -40,7 +40,7 @@ from .exceptions import ClientDisconnected
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
 from .init_image import load_init_image
 from .job_monitor import JobMonitor, log_summary
-from .loras import apply_triggers, normalize_prompt, resolve_path
+from .loras import apply_triggers, list_catalog_entries, normalize_prompt, resolve_path
 from .pipeline_cache import IdleGuard, current_pipe
 from .metadata import GenMeta, save_image
 from .pipeline_jobs import generate_one, recover_pipe, run_batch_on_pipe
@@ -346,6 +346,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/health":
             self._json(200, _health_payload())
+            return
+        if parsed.path == "/loras":
+            self._json(200, {"loras": list_catalog_entries()})
             return
         if parsed.path == "/gallery":
             params = parse_qs(parsed.query)

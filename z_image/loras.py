@@ -47,6 +47,31 @@ def load_catalog(path: Path | None = None) -> dict:
         return json.load(f)
 
 
+def list_catalog_entries(catalog: dict | None = None) -> list[dict]:
+    catalog = catalog if catalog is not None else load_catalog()
+    root = loras_dir()
+    rows: list[dict] = []
+    for file in sorted(catalog.keys()):
+        norm = normalize_filename(file)
+        entry = catalog_entry(catalog, norm)
+        available = False
+        try:
+            resolve_path(norm, root)
+            available = True
+        except FileNotFoundError:
+            pass
+        rows.append(
+            {
+                "file": norm,
+                "name": norm.removesuffix(".safetensors"),
+                "default_strength": float(entry.get("default_strength", 1.0)),
+                "trigger": (entry.get("trigger") or "").strip(),
+                "available": available,
+            }
+        )
+    return rows
+
+
 def catalog_entry(catalog: dict, name: str) -> dict:
     file = normalize_filename(name)
     return catalog.get(file) or catalog.get(file.removesuffix(".safetensors"), {})
