@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from .config import LORAS_JSON, loras_dir
 from .sizes import snap_dim
+
+_LEADING_PUNCT_RE = re.compile(r"^[\s,;:.\-]+")
+_TRAILING_PUNCT_RE = re.compile(r"[\s,;:.]+$")
+_TRAILING_DOUBLE_PUNCT_RE = re.compile(r"([,;:.])\1+$")
 
 
 @dataclass(frozen=True)
@@ -28,6 +33,36 @@ def normalize_prompt(prompt: str) -> str:
     if "\\n" in prompt:
         prompt = prompt.replace("\\n", "\n")
     return prompt
+
+
+def clean_example_prompt(prompt: str, trigger: str = "") -> str:
+    """Strip trigger prefixes and stray punctuation from catalog example prompts."""
+    text = normalize_prompt(prompt).strip()
+    trigger = (trigger or "").strip()
+    if trigger and text:
+        parts = sorted({trigger, *re.split(r",\s*", trigger)}, key=len, reverse=True)
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            pattern = re.compile(r"^" + re.escape(part) + r"[\s,;:.\-]*", re.IGNORECASE)
+            text = pattern.sub("", text, count=1).lstrip()
+    text = _LEADING_PUNCT_RE.sub("", text)
+    text = _TRAILING_DOUBLE_PUNCT_RE.sub(r"\1", text)
+    text = _TRAILING_PUNCT_RE.sub("", text)
+    return text.strip()
+
+
+def catalog_prompts(entry: dict) -> list[str]:
+    trigger = (entry.get("trigger") or "").strip()
+    seen: set[str] = set()
+    prompts: list[str] = []
+    for raw in entry.get("prompts") or []:
+        cleaned = clean_example_prompt(raw, trigger)
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            prompts.append(cleaned)
+    return prompts
 
 
 def lora_name(name: str) -> str:
@@ -65,9 +100,9 @@ def list_catalog_entries(catalog: dict | None = None) -> list[dict]:
             "trigger": (entry.get("trigger") or "").strip(),
             "available": available,
         }
-        prompts = entry.get("prompts") or []
+        prompts = catalog_prompts(entry)
         if prompts:
-            row["prompt"] = normalize_prompt(prompts[0])
+            row["prompts"] = prompts
         width = entry.get("width")
         height = entry.get("height")
         if width and height:
@@ -171,7 +206,7 @@ def benchmark_plan(
         prompts = entry.get("prompts") or []
         if not prompts:
             continue
-        for prompt in prompts:
-            rows.append((name, normalize_prompt(prompt), seed_base + idx * (repeat + 1)))
+        for prompt in catalog_prompts(entry):
+            rows.append((name, prompt, seed_base + idx * (repeat + 1)))
             idx += 1
     return rows

@@ -117,7 +117,8 @@
       flex-direction: column;
     }
 
-    .field-lora { grid-column: 1 / -1; }
+    .field-lora { grid-column: 1; }
+    .field-lora-example { grid-column: 2; }
 
     .field-width { grid-column: 1; }
     .field-height { grid-column: 2; }
@@ -534,6 +535,13 @@
           <span class="field-label">LoRA</span>
           <select id="lora">
             <option value="">None</option>
+          </select>
+        </label>
+
+        <label class="field field-lora-example has-tip" data-tip="Example prompts from the catalog. Picking one always fills the prompt field.">
+          <span class="field-label">Example</span>
+          <select id="lora-example" disabled>
+            <option value="">—</option>
           </select>
         </label>
 
@@ -1341,14 +1349,64 @@
       await updateViewer({ scrollGallery });
     }
 
+    function exampleLabel(prompt) {
+      const oneLine = prompt.replace(/\s+/g, ' ').trim();
+      if (oneLine.length <= 56) {
+        return oneLine;
+      }
+      return `${oneLine.slice(0, 53)}…`;
+    }
+
+    function syncExampleDropdown(entry) {
+      const select = $('lora-example');
+      select.innerHTML = '';
+      if (!entry?.prompts?.length) {
+        select.disabled = true;
+        return;
+      }
+      entry.prompts.forEach((prompt, index) => {
+        const opt = document.createElement('option');
+        opt.value = String(index);
+        opt.textContent = exampleLabel(prompt);
+        select.appendChild(opt);
+      });
+      select.disabled = false;
+      select.value = '0';
+    }
+
+    function applyExamplePrompt({ force = false } = {}) {
+      const name = $('lora').value;
+      if (!name) {
+        return;
+      }
+      const entry = loraCatalog.find((item) => item.name === name);
+      if (!entry?.prompts?.length) {
+        return;
+      }
+      const index = parseInt($('lora-example').value, 10) || 0;
+      const prompt = entry.prompts[index];
+      if (!prompt) {
+        return;
+      }
+      const current = $('prompt').value.trim();
+      if (force || !current || loraExamplePrompts.has(current)) {
+        $('prompt').value = prompt;
+      }
+    }
+
     async function loadLoras() {
       const res = await fetch('/loras');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load LoRAs');
       loraCatalog = data.loras || [];
-      loraExamplePrompts = new Set(
-        loraCatalog.map((entry) => entry.prompt?.trim()).filter(Boolean),
-      );
+      loraExamplePrompts = new Set();
+      for (const entry of loraCatalog) {
+        for (const prompt of entry.prompts || []) {
+          if (prompt?.trim()) {
+            loraExamplePrompts.add(prompt.trim());
+          }
+        }
+      }
       const select = $('lora');
       select.innerHTML = '<option value="">None</option>';
       for (const entry of loraCatalog) {
@@ -1367,24 +1425,12 @@
       }
     }
 
-    function applyLoraPrompt() {
-      const name = $('lora').value;
-      if (!name) {
-        return;
-      }
-      const entry = loraCatalog.find((item) => item.name === name);
-      if (!entry?.prompt) {
-        return;
-      }
-      const current = $('prompt').value.trim();
-      if (!current || loraExamplePrompts.has(current)) {
-        $('prompt').value = entry.prompt;
-      }
-    }
-
     function applyLoraSelection() {
+      const name = $('lora').value;
+      const entry = name ? loraCatalog.find((item) => item.name === name) : null;
+      syncExampleDropdown(entry);
       applyLoraSize();
-      applyLoraPrompt();
+      applyExamplePrompt({ force: false });
     }
 
     function applyLoraSize() {
@@ -1788,6 +1834,11 @@
       saveFormState();
       onFormContextChange();
     });
+    $('lora-example').addEventListener('change', () => {
+      applyExamplePrompt({ force: true });
+      saveFormState();
+      onFormContextChange();
+    });
     $('width').addEventListener('input', onFormContextChange);
     $('height').addEventListener('input', onFormContextChange);
     $('width').addEventListener('blur', () => onSizeBlur($('width')));
@@ -1864,6 +1915,8 @@
       .catch((err) => setStatus(err.message, true))
       .finally(() => {
         loadFormState();
+        const name = $('lora').value;
+        syncExampleDropdown(name ? loraCatalog.find((item) => item.name === name) : null);
         updateControls();
         loadGallery().catch((err) => setStatus(err.message, true));
       });
