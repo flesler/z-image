@@ -180,6 +180,7 @@
       }
       #counter { font-size: clamp(0.7rem, 2.8cqh, 0.85rem); }
       .preview-stage { padding: clamp(0.4em, 2.5cqh, 0.75em); }
+      .preview-frame { padding: clamp(0.35em, 2cqh, 0.5em) clamp(1.6em, 8cqw, 2.25em); }
       .nav-btn {
         width: clamp(1.8em, 9cqh, 2.6em);
         height: clamp(1.8em, 9cqh, 2.6em);
@@ -294,23 +295,36 @@
       height: 100%;
       display: flex;
       flex-direction: column;
+      align-items: stretch;
+      justify-content: center;
+      gap: 0.35em;
+      min-height: 0;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .preview-frame {
+      flex: 1 1 0;
+      min-height: 0;
+      min-width: 0;
+      width: 100%;
+      display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.5em;
-      min-height: 0;
+      padding: 0.5em 2.25em;
+      overflow: hidden;
     }
 
     #preview {
-      max-width: 100%;
-      max-height: 100%;
-      width: auto;
-      height: auto;
+      display: block;
+      width: 100%;
+      height: 100%;
       object-fit: contain;
       border-radius: 0.5em;
       box-shadow: 0 1.2em 2.5em rgba(0,0,0,0.45);
     }
 
-    #empty { font-size: 0.92em; color: rgba(255,255,255,0.35); }
+    #empty { font-size: 0.92em; color: rgba(255,255,255,0.35); text-align: center; padding: 0 1em; }
     #preview-meta {
       font-size: 0.78em;
       color: rgba(255,255,255,0.4);
@@ -435,7 +449,7 @@
 
         <label class="field field-seed">
           <span class="field-label">Seed</span>
-          <input id="seed" type="text" value="random" disabled>
+          <input id="seed" type="text" value="random" placeholder="random (-1)" inputmode="numeric" autocomplete="off">
         </label>
 
         <div class="field field-upload">
@@ -471,8 +485,10 @@
         <button type="button" id="prev-btn" class="nav-btn" aria-label="Previous">‹</button>
 
         <div class="preview-wrap">
-          <img id="preview" alt="" class="hidden">
-          <p id="empty">No images in gallery yet</p>
+          <div class="preview-frame">
+            <img id="preview" alt="" class="hidden">
+            <p id="empty">No images in gallery yet</p>
+          </div>
           <p id="preview-meta"></p>
           <p id="preview-prompt" class="hidden"></p>
         </div>
@@ -521,6 +537,7 @@
         width: $('width').value,
         height: $('height').value,
         count: $('count').value,
+        seed: $('seed').value,
       };
     }
 
@@ -541,6 +558,7 @@
         if (data.width != null) $('width').value = data.width;
         if (data.height != null) $('height').value = data.height;
         if (data.count != null) $('count').value = data.count;
+        if (typeof data.seed === 'string') $('seed').value = data.seed;
       } catch {
         // ignore corrupt storage
       }
@@ -683,6 +701,18 @@
       }
     }
 
+    function parseSeedInput(raw) {
+      const text = String(raw ?? '').trim();
+      if (!text || /^random$/i.test(text)) {
+        return null;
+      }
+      const n = parseInt(text, 10);
+      if (!Number.isFinite(n) || n < 0) {
+        return null;
+      }
+      return n;
+    }
+
     function updateSeedField() {
       $('seed').value = lastSeed != null ? String(lastSeed) : 'random';
     }
@@ -736,7 +766,6 @@
       const rightActiveMode = generating && isSecondaryMode(activeGenMode) ? activeGenMode : rightMode;
       updateGenButton(refineBtn, rightActiveMode, rightLabel);
       $('upload-btn').classList.toggle('is-busy', workerBusy);
-      updateSeedField();
     }
 
     function setGenerating(on) {
@@ -852,6 +881,7 @@
         lastSeed = null;
         lastGenMode = null;
       }
+      updateSeedField();
       updateControls();
     }
 
@@ -1102,7 +1132,8 @@
       try {
         let last = null;
         let done = 0;
-        let nextSeed = startSeedForMode(mode);
+        const userSeed = parseSeedInput($('seed').value);
+        let nextSeed = userSeed != null ? userSeed : startSeedForMode(mode);
         const batchSeedBase = count > 1 && nextSeed != null ? nextSeed : null;
         let randomBatchBase = null;
         let openedExisting = false;
@@ -1184,6 +1215,7 @@
         genProgress = null;
         activeGenMode = null;
         setGenerating(false);
+        updateSeedField();
       }
     }
 

@@ -96,6 +96,7 @@ def encode_prompts(
             to_encode.append(prompt)
 
     if to_encode:
+        embed_cache.maybe_prune()
         ensure_text_encoder(pipe)
         for prompt in to_encode:
             t_one = time.perf_counter()

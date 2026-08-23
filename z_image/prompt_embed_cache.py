@@ -15,6 +15,9 @@ from zimage.hardware import MODEL_ID_MAP
 from .config import data_dir
 from .loras import normalize_prompt
 
+_last_prune_at = 0.0
+PRUNE_INTERVAL_S = 3600
+
 
 def cache_enabled() -> bool:
     return os.environ.get("Z_IMAGE_PROMPT_EMBED_CACHE", "1").lower() in ("1", "true", "yes")
@@ -160,15 +163,28 @@ def remove_legacy_layout() -> int:
     return removed
 
 
+def maybe_prune() -> dict[str, int] | None:
+    """Prune stale entries at most once per hour during active encoding."""
+    if not cache_enabled():
+        return None
+    global _last_prune_at
+    now = time.time()
+    if now - _last_prune_at < PRUNE_INTERVAL_S:
+        return None
+    _last_prune_at = now
+    return prune()
+
+
 def prune(
     *,
-    max_age_days: int | None = None,
+    max_age_hours: float | None = None,
     max_entries: int | None = None,
     max_mb: int | None = None,
 ) -> dict[str, int]:
-    max_age_days = max_age_days if max_age_days is not None else int(
-        os.environ.get("Z_IMAGE_PROMPT_EMBED_CACHE_MAX_AGE_DAYS", "90")
-    )
+    if max_age_hours is None and os.environ.get("Z_IMAGE_PROMPT_EMBED_CACHE_MAX_AGE_DAYS"):
+        max_age_hours = float(os.environ["Z_IMAGE_PROMPT_EMBED_CACHE_MAX_AGE_DAYS"]) * 24
+    if max_age_hours is None:
+        max_age_hours = float(os.environ.get("Z_IMAGE_PROMPT_EMBED_CACHE_MAX_AGE_HOURS", "24"))
     max_entries = max_entries if max_entries is not None else int(
         os.environ.get("Z_IMAGE_PROMPT_EMBED_CACHE_MAX_ENTRIES", "500")
     )
@@ -181,18 +197,18 @@ def prune(
     removed = 0
     now = time.time()
 
-    def age_days(entry: dict[str, Any]) -> float:
+    def age_hours(entry: dict[str, Any]) -> float:
         stamp = entry.get("last_used_at") or entry.get("created_at")
         if not stamp:
-            return 9999.0
+            return 999999.0
         try:
             dt = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
-            return (now - dt.timestamp()) / 86400
+            return (now - dt.timestamp()) / 3600
         except ValueError:
-            return 9999.0
+            return 999999.0
 
     for entry in list(entries):
-        if age_days(entry) > max_age_days:
+        if age_hours(entry) > max_age_hours:
             remove_entry(entry["hash"])
             entries.remove(entry)
             removed += 1
