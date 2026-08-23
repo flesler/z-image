@@ -269,6 +269,7 @@
       white-space: nowrap;
     }
     #status.is-error { color: #ff8a8a; }
+    #status.has-tip { cursor: help; }
 
     .gallery-header {
       display: flex;
@@ -589,7 +590,7 @@
             <img id="preview" alt="" class="hidden">
             <p id="empty">No images in gallery yet</p>
           </div>
-          <p id="preview-meta"></p>
+          <p id="preview-meta" class="has-tip tip-below"></p>
           <p id="preview-prompt" class="hidden"></p>
         </div>
 
@@ -718,7 +719,7 @@
       if (snapDim($('height').value) !== viewerContext.height) {
         return false;
       }
-      if (viewerContext.lora != null && ($('lora').value || '') !== viewerContext.lora) {
+      if (($('lora').value || '') !== (viewerContext.lora || '')) {
         return false;
       }
       return true;
@@ -968,10 +969,66 @@
       updateControls();
     }
 
-    function setStatus(msg, isError = false) {
+    function formatTimingTip(timing, totalS) {
+      if (!timing) {
+        return '';
+      }
+      const lines = [];
+      const push = (label, key) => {
+        const value = timing[key];
+        if (value != null && value > 0) {
+          lines.push(`${label}: ${value}s`);
+        }
+      };
+      push('Model', 'model_s');
+      push('LoRA', 'lora_s');
+      push('Encode', 'encode_s');
+      push('Denoise', 'denoise_s');
+      if (totalS != null && totalS > 0) {
+        lines.push(`Total: ${totalS}s`);
+      }
+      return lines.join('\n');
+    }
+
+    function mergeTiming(agg, next) {
+      if (!next?.timing) {
+        return agg;
+      }
+      const out = agg ? { ...agg } : {};
+      for (const key of ['model_s', 'lora_s', 'encode_s', 'denoise_s']) {
+        if (next.timing[key] != null) {
+          out[key] = Math.round(((out[key] || 0) + next.timing[key]) * 100) / 100;
+        }
+      }
+      return out;
+    }
+
+    function setLoraFromMeta(loraName) {
+      const select = $('lora');
+      if (!loraName) {
+        select.value = '';
+      } else {
+        const match = [...select.options].find(
+          (opt) => opt.value === loraName && !opt.disabled,
+        );
+        select.value = match ? loraName : '';
+      }
+      const entry = select.value ? loraCatalog.find((item) => item.name === select.value) : null;
+      syncExampleDropdown(entry);
+    }
+
+    function setStatus(msg, isError = false, tip = null) {
       const el = $('status');
       el.textContent = msg || '';
       el.classList.toggle('is-error', Boolean(isError && msg));
+      const tipText = tip ? formatTimingTip(tip.timing, tip.totalS) : '';
+      if (tipText) {
+        el.classList.add('has-tip', 'tip-below');
+        el.dataset.tip = tipText;
+      } else {
+        el.classList.remove('has-tip', 'tip-below');
+        delete el.dataset.tip;
+      }
     }
 
     function formatDate(ts) {
@@ -1097,16 +1154,13 @@
       if (meta.template || meta.prompt) {
         $('prompt').value = meta.template || meta.prompt;
       }
-      if (meta.width) $('width').value = meta.width;
-      if (meta.height) $('height').value = meta.height;
-      if (meta.lora) {
-        const match = [...$('lora').options].find(
-          (opt) => opt.value === meta.lora && !opt.disabled,
-        );
-        if (match) {
-          $('lora').value = meta.lora;
-        }
+      if (meta.width) {
+        $('width').value = meta.width;
       }
+      if (meta.height) {
+        $('height').value = meta.height;
+      }
+      setLoraFromMeta(meta.lora ?? null);
       snapSizeFields();
     }
 
@@ -1258,6 +1312,7 @@
         clearImageCache();
         empty.classList.remove('hidden');
         meta.textContent = '';
+        delete meta.dataset.tip;
         prompt.textContent = '';
         prompt.classList.add('hidden');
         counter.textContent = '';
@@ -1270,6 +1325,7 @@
       const item = images[index];
       img.alt = item.name;
       meta.textContent = `${item.name} · ${formatDate(item.created_at)}`;
+      meta.dataset.tip = item.name;
       counter.textContent = `${index + 1} / ${images.length}`;
       updateDeleteButton();
       await loadViewerImage(item);
@@ -1556,6 +1612,8 @@
       try {
         let last = null;
         let done = 0;
+        let totalElapsed = 0;
+        let aggTiming = null;
         const runStartSeed = resolveRunStartSeed(mode);
         const batchSeedBase = count > 1 && runStartSeed != null ? runStartSeed : null;
         let randomBatchBase = null;
@@ -1588,6 +1646,10 @@
             });
 
             last = await generateOne(payload, { focus: false });
+            if (!last.skipped && last.elapsed_s != null) {
+              totalElapsed = Math.round((totalElapsed + last.elapsed_s) * 100) / 100;
+            }
+            aggTiming = mergeTiming(aggTiming, last);
 
             if (mode === 'refined') {
               if (last.gallery_path) {
@@ -1624,13 +1686,23 @@
         }
 
         if (genAbort) {
-          setStatus(`Stopped after ${done} of ${count} · seed ${last?.seed ?? '—'}`);
+          setStatus(`Stopped after ${done} of ${count}`, false, {
+            timing: aggTiming,
+            totalS: totalElapsed || null,
+          });
         } else if (openedExisting && count === 1) {
-          setStatus(`Opened existing · seed ${last.seed}`);
+          setStatus('Opened existing');
         } else if (count > 1) {
-          setStatus(`${label} done ${count} images · seed ${last.seed}`);
+          const elapsedPart = totalElapsed ? ` in ${totalElapsed}s` : '';
+          setStatus(`${label} done ${count} images${elapsedPart}`, false, {
+            timing: aggTiming,
+            totalS: totalElapsed || null,
+          });
         } else {
-          setStatus(`${label} done in ${last.elapsed_s}s · seed ${last.seed}`);
+          setStatus(`${label} done in ${last.elapsed_s}s`, false, {
+            timing: last.timing,
+            totalS: last.elapsed_s,
+          });
         }
         scrollToGallery();
       } catch (err) {

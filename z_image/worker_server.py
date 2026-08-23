@@ -218,7 +218,7 @@ def run_generate_job(body: dict) -> dict:
     if monitor_ctx:
         monitor_ctx.__enter__()
     try:
-        image = generate_one(
+        image, phase_timing = generate_one(
             prompt=save_prompt,
             template=template,
             steps=steps,
@@ -264,6 +264,7 @@ def run_generate_job(body: dict) -> dict:
         "precision": precision,
         "loras": len(loras),
         "elapsed_s": round(elapsed, 2),
+        "timing": {key: round(value, 2) for key, value in phase_timing.items()},
         "seed": seed,
         "gpu": post,
         "monitor": monitor,

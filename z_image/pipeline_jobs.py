@@ -365,8 +365,15 @@ def run_on_pipe(
     prompt_embeds: list[torch.Tensor] | None = None,
     init_image: Image.Image | None = None,
     strength: float | None = None,
+    timings: dict[str, float] | None = None,
 ):
-    _load_loras(pipe, loras)
+    lora_s = 0.0
+    if loras:
+        t_lora = time.perf_counter()
+        _load_loras(pipe, loras)
+        lora_s = time.perf_counter() - t_lora
+    if timings is not None and lora_s > 0:
+        timings["lora_s"] = lora_s
     try:
         if init_image is not None:
             if strength is None:
@@ -610,8 +617,14 @@ def generate_one(
     prompt_embeds: list[torch.Tensor] | None = None,
     init_image: Image.Image | None = None,
     strength: float | None = None,
-):
+) -> tuple[Image.Image, dict[str, float]]:
+    timings: dict[str, float] = {}
+    t_load = time.perf_counter()
     pipe = load_pipeline(precision=precision)
+    model_s = time.perf_counter() - t_load
+    if model_s > 0:
+        timings["model_s"] = model_s
+    encode_s = 0.0
     if prompt is not None and prompt_embeds is None:
         from .loras import apply_triggers, lora_name
         from .templates import all_variants
@@ -626,10 +639,14 @@ def generate_one(
             encode_key = apply_triggers(prompt, specs)
         else:
             encode_key = prompt
+        t_enc = time.perf_counter()
         prompt_embeds = encode_prompts(pipe, encode_list)[encode_key]
+        encode_s = time.perf_counter() - t_enc
         prompt = None
+    timings["encode_s"] = encode_s
     try:
-        return run_on_pipe(
+        t_den = time.perf_counter()
+        image = run_on_pipe(
             pipe,
             steps=steps,
             width=width,
@@ -640,7 +657,10 @@ def generate_one(
             prompt_embeds=prompt_embeds,
             init_image=init_image,
             strength=strength,
+            timings=timings,
         )
+        timings["denoise_s"] = time.perf_counter() - t_den
+        return image, timings
     except Exception:
         traceback.print_exc()
         raise
