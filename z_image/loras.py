@@ -65,6 +65,9 @@ def list_catalog_entries(catalog: dict | None = None) -> list[dict]:
             "trigger": (entry.get("trigger") or "").strip(),
             "available": available,
         }
+        prompts = entry.get("prompts") or []
+        if prompts:
+            row["prompt"] = normalize_prompt(prompts[0])
         width = entry.get("width")
         height = entry.get("height")
         if width and height:

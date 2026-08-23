@@ -613,6 +613,7 @@
     const MAX_DUP_ATTEMPTS = 50;
     const FORM_STORAGE_KEY = 'z-image-form';
     let loraCatalog = [];
+    let loraExamplePrompts = new Set();
     let portraitPanel = 0;
     let touchStartY = 0;
     let deleteSkipConfirm = false;
@@ -692,6 +693,7 @@
         prompt: (meta.template || meta.prompt || '').trim(),
         width: meta.width != null ? snapDim(meta.width) : null,
         height: meta.height != null ? snapDim(meta.height) : null,
+        lora: meta.lora ?? null,
       };
     }
 
@@ -699,20 +701,33 @@
       if (!viewerContext) {
         return false;
       }
-      return $('prompt').value.trim() === viewerContext.prompt
-        && snapDim($('width').value) === viewerContext.width
-        && snapDim($('height').value) === viewerContext.height;
+      if ($('prompt').value.trim() !== viewerContext.prompt) {
+        return false;
+      }
+      if (snapDim($('width').value) !== viewerContext.width) {
+        return false;
+      }
+      if (snapDim($('height').value) !== viewerContext.height) {
+        return false;
+      }
+      if (viewerContext.lora != null && ($('lora').value || '') !== viewerContext.lora) {
+        return false;
+      }
+      return true;
     }
 
     function canRefine() {
-      return lastSeed != null && lastGenMode !== 'refined' && formMatchesViewer();
+      return lastSeed != null && lastGenMode === 'preview' && formMatchesViewer();
     }
 
     function canGenerate() {
-      if (lastGenMode === 'refined') {
-        return true;
+      if (canRefine()) {
+        return false;
       }
-      return lastSeed != null && lastGenMode !== 'refined' && !formMatchesViewer();
+      if (lastGenMode === 'refined') {
+        return lastSeed != null;
+      }
+      return lastSeed != null && !formMatchesViewer();
     }
 
     function secondaryMode() {
@@ -1010,6 +1025,8 @@
       }
       const seedVal = field('Seed');
       const stepsVal = field('Steps');
+      const loraRaw = field('LoRA');
+      const lora = loraRaw ? loraRaw.split(',')[0].trim() : null;
       return {
         prompt: prompt || null,
         template,
@@ -1017,45 +1034,72 @@
         height: Number.isFinite(height) ? height : null,
         seed: seedVal != null ? parseInt(seedVal, 10) : null,
         steps: stepsVal != null ? parseInt(stepsVal, 10) : null,
+        lora: lora || null,
       };
     }
 
     function parseFilenameMeta(name) {
-      const m = name.match(/-(\d+)x(\d+)-(\d+)(?:-s(\d+))?\.[a-z]+$/i);
-      if (!m) return null;
+      const sizeMatch = name.match(/-(\d+)x(\d+)-/i);
+      if (!sizeMatch) {
+        return null;
+      }
+      const seedMatch = name.match(/-(\d+)(?:-s\d+)?(?:-i[\d.]+)?(?:-base)?\.[a-z]+$/i);
+      if (!seedMatch) {
+        return null;
+      }
       return {
         prompt: null,
-        width: parseInt(m[1], 10),
-        height: parseInt(m[2], 10),
-        seed: parseInt(m[3], 10),
-        steps: m[4] ? parseInt(m[4], 10) : REFINED_STEPS,
+        width: parseInt(sizeMatch[1], 10),
+        height: parseInt(sizeMatch[2], 10),
+        seed: parseInt(seedMatch[1], 10),
+        lora: null,
       };
     }
 
-    function inferGenMode(steps) {
-      if (steps === REFINED_STEPS) return 'refined';
-      if (steps != null) return 'preview';
+    function inferGenModeFromFilename(name) {
+      if (!name) {
+        return null;
+      }
+      if (/-s3\b/i.test(name)) {
+        return 'preview';
+      }
+      if (/-\d+x\d+-/i.test(name)) {
+        return 'refined';
+      }
       return null;
     }
 
-    function applyGenMeta(meta) {
+    function applyViewerState(meta, filename) {
       captureViewerContext(meta);
-      if (!meta || generating) return;
-      if (meta.template || meta.prompt) {
-        $('prompt').value = meta.template || meta.prompt;
-      }
-      if (meta.width) $('width').value = meta.width;
-      if (meta.height) $('height').value = meta.height;
-      snapSizeFields();
-      if (meta.seed != null) {
+      if (meta?.seed != null) {
         lastSeed = meta.seed;
-        lastGenMode = inferGenMode(meta.steps);
+        lastGenMode = inferGenModeFromFilename(filename);
       } else {
         lastSeed = null;
         lastGenMode = null;
       }
       updateSeedField();
       updateControls();
+    }
+
+    function syncFormFromMeta(meta) {
+      if (!meta || generating) {
+        return;
+      }
+      if (meta.template || meta.prompt) {
+        $('prompt').value = meta.template || meta.prompt;
+      }
+      if (meta.width) $('width').value = meta.width;
+      if (meta.height) $('height').value = meta.height;
+      if (meta.lora) {
+        const match = [...$('lora').options].find(
+          (opt) => opt.value === meta.lora && !opt.disabled,
+        );
+        if (match) {
+          $('lora').value = meta.lora;
+        }
+      }
+      snapSizeFields();
     }
 
     async function extractMetaFromBlob(blob, filename) {
@@ -1065,7 +1109,12 @@
       }
       const fallback = parseFilenameMeta(filename);
       if (fallback) {
-        meta = { ...fallback, ...meta, prompt: meta?.prompt ?? fallback.prompt };
+        meta = {
+          ...fallback,
+          ...meta,
+          prompt: meta?.prompt ?? fallback.prompt,
+          seed: meta?.seed ?? fallback.seed,
+        };
       }
       return meta;
     }
@@ -1121,7 +1170,8 @@
 
       if (token !== viewerToken) return;
       img.src = cached.objectUrl;
-      applyGenMeta(cached.meta);
+      applyViewerState(cached.meta, item.name);
+      syncFormFromMeta(cached.meta);
       updateViewerPrompt(cached.meta);
     }
 
@@ -1296,6 +1346,9 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load LoRAs');
       loraCatalog = data.loras || [];
+      loraExamplePrompts = new Set(
+        loraCatalog.map((entry) => entry.prompt?.trim()).filter(Boolean),
+      );
       const select = $('lora');
       select.innerHTML = '<option value="">None</option>';
       for (const entry of loraCatalog) {
@@ -1312,6 +1365,26 @@
         opt.textContent = label;
         select.appendChild(opt);
       }
+    }
+
+    function applyLoraPrompt() {
+      const name = $('lora').value;
+      if (!name) {
+        return;
+      }
+      const entry = loraCatalog.find((item) => item.name === name);
+      if (!entry?.prompt) {
+        return;
+      }
+      const current = $('prompt').value.trim();
+      if (!current || loraExamplePrompts.has(current)) {
+        $('prompt').value = entry.prompt;
+      }
+    }
+
+    function applyLoraSelection() {
+      applyLoraSize();
+      applyLoraPrompt();
     }
 
     function applyLoraSize() {
@@ -1501,7 +1574,6 @@
             throw new Error('Could not find an unused seed');
           }
 
-          lastGenMode = mode === 'preview' ? 'preview' : 'refined';
           done = i + 1;
         }
 
@@ -1522,6 +1594,14 @@
         genProgress = null;
         activeGenMode = null;
         setGenerating(false);
+        const item = images[index];
+        if (item) {
+          const cached = imageCache.get(item.path);
+          if (cached) {
+            applyViewerState(cached.meta, item.name);
+            syncFormFromMeta(cached.meta);
+          }
+        }
         updateSeedField();
       }
     }
@@ -1570,7 +1650,8 @@
           setStatus('Loaded from image metadata');
         }
 
-        applyGenMeta(meta);
+        applyViewerState(meta, file.name);
+        syncFormFromMeta(meta);
       } catch (err) {
         setStatus(err.message, true);
       } finally {
@@ -1703,7 +1784,7 @@
     $('scroll-jump-btn').addEventListener('click', onScrollJumpClick);
     $('prompt').addEventListener('input', onFormContextChange);
     $('lora').addEventListener('change', () => {
-      applyLoraSize();
+      applyLoraSelection();
       saveFormState();
       onFormContextChange();
     });
