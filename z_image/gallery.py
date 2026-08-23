@@ -39,6 +39,17 @@ def open_gallery_file(relative: str) -> Path:
     return path
 
 
+def delete_image(relative: str) -> dict:
+    path = resolve_gallery_path(relative)
+    if path.suffix.lower() not in IMAGE_SUFFIXES:
+        raise ValueError("not an image file")
+    if not path.is_file():
+        raise FileNotFoundError(relative)
+    rel = path.resolve().relative_to(gallery_root())
+    path.unlink()
+    return {"path": rel.as_posix(), "name": path.name}
+
+
 def _created_at(stat: os.stat_result) -> float:
     return float(getattr(stat, "st_birthtime", stat.st_mtime))
 

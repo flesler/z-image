@@ -271,11 +271,41 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 0.75em;
       padding: 0.65em 1em;
       border-bottom: 1px solid rgba(255,255,255,0.05);
       font-size: 0.92em;
       color: rgba(255,255,255,0.6);
       flex-shrink: 0;
+    }
+
+    .gallery-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.65em;
+    }
+
+    .delete-btn {
+      border: 1px solid rgba(255, 96, 96, 0.28);
+      background: rgba(255, 72, 72, 0.1);
+      color: rgba(255, 168, 168, 0.95);
+      border-radius: 0.45em;
+      padding: 0.28em 0.55em;
+      font: inherit;
+      font-size: 0.88em;
+      line-height: 1.2;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+    }
+
+    .delete-btn:hover:not(:disabled) {
+      background: rgba(255, 72, 72, 0.2);
+      border-color: rgba(255, 120, 120, 0.45);
+    }
+
+    .delete-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
     }
 
     #counter { font-size: 0.85em; color: rgba(255,255,255,0.4); font-variant-numeric: tabular-nums; }
@@ -407,6 +437,52 @@
 
     .scroll-jump-btn:hover { background: rgba(0,0,0,0.75); }
 
+    /* tooltips */
+    .tip-host {
+      display: block;
+      min-width: 0;
+    }
+
+    .gen-actions .tip-host {
+      flex: 1 1 0;
+      width: 100%;
+    }
+
+    #app-tooltip {
+      position: fixed;
+      z-index: 10000;
+      left: 0;
+      top: 0;
+      width: max-content;
+      max-width: min(16.5em, 88vw);
+      padding: 0.55em 0.7em;
+      border-radius: 0.55em;
+      background: rgba(10, 12, 20, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.72rem;
+      font-weight: 400;
+      line-height: 1.45;
+      text-align: center;
+      white-space: pre-line;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.14s ease, visibility 0.14s;
+    }
+
+    #app-tooltip.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    @media (hover: none) {
+      #app-tooltip {
+        display: none;
+      }
+    }
+
     @media (max-aspect-ratio: 10/11) {
       body:not(.portrait) .shell { flex-direction: column; }
       body:not(.portrait) .form-panel {
@@ -427,48 +503,52 @@
       </div>
 
       <form id="gen-form">
-        <label class="field field-prompt">
+        <label class="field field-prompt has-tip" data-tip="Describe the scene, or use {option A|option B} templates — seeds cycle through combinations.">
           <span class="field-label">Prompt</span>
           <textarea id="prompt" required placeholder="Describe the image…"></textarea>
         </label>
 
-        <label class="field field-width">
+        <label class="field field-width has-tip" data-tip="Output width in pixels. Snaps to multiples of 16 (VAE).">
           <span class="field-label">Width</span>
           <input id="width" type="number" min="256" max="4096" step="16" value="1024">
         </label>
 
-        <label class="field field-height">
+        <label class="field field-height has-tip" data-tip="Output height in pixels. Snaps to multiples of 16 (VAE).">
           <span class="field-label">Height</span>
           <input id="height" type="number" min="256" max="4096" step="16" value="1024">
         </label>
 
-        <label class="field field-count">
+        <label class="field field-count has-tip" data-tip="Images per run. Each uses the next seed; templates advance one variant per image.">
           <span class="field-label">Count</span>
           <input id="count" type="number" min="1" max="50" value="1">
         </label>
 
-        <label class="field field-seed">
+        <label class="field field-seed has-tip" data-tip="Leave random or enter a number. Preview/Generate start at last seed + 1 unless you override.">
           <span class="field-label">Seed</span>
           <input id="seed" type="text" value="random" placeholder="random (-1)" inputmode="numeric" autocomplete="off">
         </label>
 
         <div class="field field-upload">
           <span class="field-label">From image</span>
-          <label id="upload-btn" class="upload-btn">
+          <label id="upload-btn" class="upload-btn has-tip tip-below" data-tip="Caption the image and fill prompt + size. Does not run img2img.">
             <input id="upload" type="file" accept="image/*">
             <span id="upload-label">Choose image…</span>
           </label>
         </div>
 
         <div class="gen-actions">
-          <button type="button" id="preview-btn" class="btn-primary">
-            <span class="btn-spinner hidden" aria-hidden="true"></span>
-            <span class="btn-text">Preview</span>
-          </button>
-          <button type="button" id="refine-btn" class="btn-primary" disabled>
-            <span class="btn-spinner hidden" aria-hidden="true"></span>
-            <span class="btn-text">Refine</span>
-          </button>
+          <span id="preview-tip" class="tip-host has-tip" data-tip="Fast 3-step preview.&#10;Ctrl+Enter · P">
+            <button type="button" id="preview-btn" class="btn-primary">
+              <span class="btn-spinner hidden" aria-hidden="true"></span>
+              <span class="btn-text">Preview</span>
+            </button>
+          </span>
+          <span id="refine-tip" class="tip-host has-tip" data-tip="Full 8-step run at the preview seed.&#10;Shift+Enter · R">
+            <button type="button" id="refine-btn" class="btn-primary" disabled>
+              <span class="btn-spinner hidden" aria-hidden="true"></span>
+              <span class="btn-text">Refine</span>
+            </button>
+          </span>
         </div>
 
         <p id="status"></p>
@@ -478,7 +558,10 @@
     <section class="panel gallery-panel" id="gallery-panel">
       <div class="gallery-header">
         <span>Gallery</span>
-        <span id="counter"></span>
+        <div class="gallery-actions">
+          <span id="counter"></span>
+          <button type="button" id="delete-btn" class="delete-btn has-tip tip-below" disabled data-tip="Delete this image&#10;Delete key">Delete</button>
+        </div>
       </div>
 
       <div class="preview-stage">
@@ -498,7 +581,8 @@
     </section>
   </div>
 
-  <button type="button" id="scroll-jump-btn" class="scroll-jump-btn" aria-label="Scroll down">↓</button>
+  <button type="button" id="scroll-jump-btn" class="scroll-jump-btn tip-below" aria-label="Scroll down" data-tip="Jump to gallery">↓</button>
+  <div id="app-tooltip" aria-hidden="true"></div>
 
   <script>
     const $ = (id) => document.getElementById(id);
@@ -521,6 +605,7 @@
     const FORM_STORAGE_KEY = 'z-image-form';
     let portraitPanel = 0;
     let touchStartY = 0;
+    let deleteSkipConfirm = false;
 
     function snapDim(value) {
       const n = parseInt(value, 10) || 1024;
@@ -694,9 +779,11 @@
       if (isOnGalleryPanel()) {
         btn.textContent = '↑';
         btn.setAttribute('aria-label', 'Scroll up');
+        btn.dataset.tip = 'Back to form';
       } else {
         btn.textContent = '↓';
         btn.setAttribute('aria-label', 'Scroll down');
+        btn.dataset.tip = 'Jump to gallery';
       }
     }
 
@@ -779,6 +866,23 @@
       }
     }
 
+    function secondaryTip() {
+      if (canRefine()) {
+        return 'Full 8 steps at the same seed and settings.\nShift+Enter · R';
+      }
+      if (canGenerate()) {
+        return 'New full 8-step run (prompt or size changed, or after refine).\nShift+Enter · G';
+      }
+      return 'Preview an image first — or change prompt/size to generate anew.';
+    }
+
+    function previewTip() {
+      if (generating && activeGenMode === 'preview' && canAbortQueue()) {
+        return 'Click again to stop after the current image.';
+      }
+      return 'Fast 3-step preview.\nCtrl+Enter · P';
+    }
+
     function updateControls() {
       const workerBusy = generating;
       const abortable = canAbortQueue();
@@ -801,7 +905,10 @@
       updateGenButton(previewBtn, 'preview', 'Preview');
       const rightActiveMode = generating && isSecondaryMode(activeGenMode) ? activeGenMode : rightMode;
       updateGenButton(refineBtn, rightActiveMode, rightLabel);
+      $('preview-tip').dataset.tip = previewTip();
+      $('refine-tip').dataset.tip = secondaryTip();
       $('upload-btn').classList.toggle('is-busy', workerBusy);
+      updateDeleteButton();
     }
 
     function setGenerating(on) {
@@ -989,6 +1096,64 @@
       updateViewerPrompt(cached.meta);
     }
 
+    function updateDeleteButton() {
+      const btn = $('delete-btn');
+      const canDelete = images.length > 0 && !generating;
+      btn.disabled = !canDelete;
+    }
+
+    async function deleteCurrentImage() {
+      if (!images.length || generating) {
+        return;
+      }
+      const item = images[index];
+      if (!deleteSkipConfirm) {
+        const ok = confirm(
+          `Delete "${item.name}"?\n\nYou won't be asked again until you reload the page.`
+        );
+        if (!ok) {
+          return;
+        }
+        deleteSkipConfirm = true;
+      }
+
+      const res = await fetch(`/gallery/file?path=${encodeURIComponent(item.path)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Delete failed');
+      }
+
+      const cached = imageCache.get(item.path);
+      if (cached) {
+        URL.revokeObjectURL(cached.objectUrl);
+        imageCache.delete(item.path);
+      }
+
+      images.splice(index, 1);
+      if (index >= images.length) {
+        index = Math.max(0, images.length - 1);
+      }
+      if (!images.length) {
+        lastSeed = null;
+        lastGenMode = null;
+        viewerContext = null;
+        updateSeedField();
+      }
+      await updateViewer();
+      updateControls();
+      setStatus(`Deleted ${item.name}`);
+    }
+
+    async function onDeleteClick() {
+      try {
+        await deleteCurrentImage();
+      } catch (err) {
+        setStatus(err.message, true);
+      }
+    }
+
     async function updateViewer({ scrollGallery = false } = {}) {
       const img = $('preview');
       const empty = $('empty');
@@ -1009,6 +1174,7 @@
         prompt.textContent = '';
         prompt.classList.add('hidden');
         counter.textContent = '';
+        updateDeleteButton();
         return;
       }
 
@@ -1018,6 +1184,7 @@
       img.alt = item.name;
       meta.textContent = `${item.name} · ${formatDate(item.created_at)}`;
       counter.textContent = `${index + 1} / ${images.length}`;
+      updateDeleteButton();
       await loadViewerImage(item);
       if (scrollGallery) scrollToGallery();
     }
@@ -1057,6 +1224,19 @@
 
     function isSubmitChord(e) {
       return e.key === 'Enter' && (e.ctrlKey || e.metaKey || e.altKey);
+    }
+
+    function isSecondaryChord(e) {
+      return e.key === 'Enter' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
+    }
+
+    async function submitSecondary() {
+      if (generating) {
+        return;
+      }
+      if (canSecondary()) {
+        await runGeneration(secondaryMode());
+      }
     }
 
     async function submitGeneration() {
@@ -1321,7 +1501,119 @@
       updateControls();
     }
 
+    function initTooltips() {
+      const tip = $('app-tooltip');
+      let active = null;
+      const canHover = () => window.matchMedia('(hover: hover)').matches;
+
+      function findTipTarget(el) {
+        if (!el || !el.closest) {
+          return null;
+        }
+        const host = el.closest('.tip-host[data-tip]');
+        if (host) {
+          return host;
+        }
+        const node = el.closest('[data-tip]');
+        if (!node || node.disabled) {
+          return null;
+        }
+        return node;
+      }
+
+      function layout(node) {
+        const below = node.classList.contains('tip-below');
+        const gap = 8;
+        const margin = 8;
+        tip.style.left = '0px';
+        tip.style.top = '0px';
+        const rect = node.getBoundingClientRect();
+        const tipRect = tip.getBoundingClientRect();
+        let left = rect.left + rect.width / 2 - tipRect.width / 2;
+        let top = below ? rect.bottom + gap : rect.top - tipRect.height - gap;
+        left = Math.max(margin, Math.min(left, window.innerWidth - tipRect.width - margin));
+        top = Math.max(margin, Math.min(top, window.innerHeight - tipRect.height - margin));
+        tip.style.left = `${Math.round(left)}px`;
+        tip.style.top = `${Math.round(top)}px`;
+      }
+
+      function show(node) {
+        const text = node.dataset.tip;
+        if (!text) {
+          return;
+        }
+        active = node;
+        tip.textContent = text;
+        tip.classList.toggle('tip-below', node.classList.contains('tip-below'));
+        tip.classList.add('visible');
+        tip.setAttribute('aria-hidden', 'false');
+        layout(node);
+      }
+
+      function hide() {
+        active = null;
+        tip.classList.remove('visible');
+        tip.setAttribute('aria-hidden', 'true');
+      }
+
+      document.addEventListener('pointerover', (e) => {
+        if (!canHover()) {
+          return;
+        }
+        const node = findTipTarget(e.target);
+        if (node) {
+          show(node);
+        }
+      });
+
+      document.addEventListener('pointerout', (e) => {
+        if (!active) {
+          return;
+        }
+        const node = findTipTarget(e.target);
+        if (!node || node !== active) {
+          return;
+        }
+        const next = e.relatedTarget;
+        if (next && active.contains(next)) {
+          return;
+        }
+        hide();
+      });
+
+      document.addEventListener('focusin', (e) => {
+        const node = findTipTarget(e.target);
+        if (node) {
+          show(node);
+        }
+      });
+
+      document.addEventListener('focusout', (e) => {
+        if (!active) {
+          return;
+        }
+        const next = e.relatedTarget;
+        if (next && active.contains(next)) {
+          return;
+        }
+        hide();
+      });
+
+      window.addEventListener('scroll', () => {
+        if (active) {
+          layout(active);
+        }
+      }, true);
+
+      window.addEventListener('resize', () => {
+        if (active) {
+          layout(active);
+        }
+      });
+    }
+
     $('gen-form').addEventListener('submit', onSubmit);
+    $('delete-btn').addEventListener('click', onDeleteClick);
     $('preview-btn').addEventListener('click', () => runGeneration('preview'));
     $('refine-btn').addEventListener('click', () => runSecondary());
     $('upload').addEventListener('change', onUpload);
@@ -1349,6 +1641,12 @@
         } else {
           runGeneration('preview');
         }
+        return;
+      }
+
+      if (isSecondaryChord(e)) {
+        e.preventDefault();
+        submitSecondary();
         return;
       }
 
@@ -1383,6 +1681,9 @@
       } else if (document.body.classList.contains('portrait') && (e.key === 'ArrowDown' || e.key === 'PageDown')) {
         e.preventDefault();
         scrollToGallery();
+      } else if (e.key === 'Delete' && !isFormFieldFocused() && images.length) {
+        e.preventDefault();
+        onDeleteClick();
       } else if (e.key === 'ArrowLeft') {
         step(-1);
       } else if (e.key === 'ArrowRight') {
@@ -1391,6 +1692,8 @@
     });
 
     loadFormState();
+    initTooltips();
+    updateControls();
     updatePortraitLayout();
     loadGallery().catch((err) => setStatus(err.message, true));
   </script>

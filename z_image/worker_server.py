@@ -30,7 +30,7 @@ from .config import (
     worker_port,
 )
 from .caption import caption_image, caption_model_device, unload_caption_model
-from .gallery import gallery_root, list_images, open_gallery_file
+from .gallery import gallery_root, list_images, open_gallery_file, delete_image
 from .metadata import read_prompt
 from .naming import output_filename
 from .sizes import require_vae_aligned
@@ -367,6 +367,25 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 self._send_file(open_gallery_file(rel_path))
+            except ValueError as e:
+                self._json(400, {"error": str(e)})
+            except FileNotFoundError:
+                self._json(404, {"error": "not found"})
+            return
+        self._json(404, {"error": "not found"})
+
+    def do_DELETE(self) -> None:
+        parsed = urlparse(self.path)
+        if parsed.path == "/gallery/file":
+            params = parse_qs(parsed.query)
+            rel_path = params.get("path", [None])[0]
+            if not rel_path:
+                self._json(400, {"error": "path required"})
+                return
+            try:
+                result = delete_image(rel_path)
+                log(f"deleted → {result['path']}")
+                self._json(200, result)
             except ValueError as e:
                 self._json(400, {"error": str(e)})
             except FileNotFoundError:
