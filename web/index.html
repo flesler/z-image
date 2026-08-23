@@ -1300,7 +1300,7 @@
       select.innerHTML = '<option value="">None</option>';
       for (const entry of loraCatalog) {
         const opt = document.createElement('option');
-        opt.value = entry.file;
+        opt.value = entry.name;
         let label = entry.name;
         if (entry.trigger) {
           label += ` — ${entry.trigger}`;
@@ -1315,11 +1315,11 @@
     }
 
     function applyLoraSize() {
-      const file = $('lora').value;
-      if (!file) {
+      const name = $('lora').value;
+      if (!name) {
         return;
       }
-      const entry = loraCatalog.find((item) => item.file === file);
+      const entry = loraCatalog.find((item) => item.name === name);
       if (!entry?.width || !entry?.height) {
         return;
       }
@@ -1330,16 +1330,16 @@
     }
 
     function selectedLoraPayload() {
-      const file = $('lora').value;
-      if (!file) {
+      const name = $('lora').value;
+      if (!name) {
         return null;
       }
-      const entry = loraCatalog.find((item) => item.file === file);
+      const entry = loraCatalog.find((item) => item.name === name);
       if (!entry || !entry.available) {
         return null;
       }
       return {
-        loras: [{ file: entry.file, strength: entry.default_strength }],
+        loras: [{ name: entry.name, strength: entry.default_strength }],
       };
     }
 

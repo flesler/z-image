@@ -84,7 +84,7 @@ def _lora_key(loras: list[tuple[str, float]] | None) -> tuple[tuple[str, float],
 def _job_group_key(job: dict) -> tuple:
     loras = job.get("loras") or []
     if loras and isinstance(loras[0], dict):
-        lora_key = tuple((entry["file"], float(entry.get("strength", 1.0))) for entry in loras)
+        lora_key = tuple((entry.get("name") or entry.get("file"), float(entry.get("strength", 1.0))) for entry in loras)
     else:
         lora_key = _lora_key(loras or None)
     return (job["prompt"], int(job["seed"]), lora_key)
@@ -121,7 +121,7 @@ def _lora_specs_from_job(job: dict) -> list[str]:
     specs: list[str] = []
     for entry in job.get("loras") or []:
         if isinstance(entry, dict):
-            specs.append(entry["file"])
+            specs.append(entry.get("name") or entry.get("file"))
         else:
             specs.append(str(entry))
     return specs
@@ -613,7 +613,7 @@ def generate_one(
 ):
     pipe = load_pipeline(precision=precision)
     if prompt is not None and prompt_embeds is None:
-        from .loras import apply_triggers
+        from .loras import apply_triggers, lora_name
         from .templates import all_variants
 
         encode_list = [prompt]
@@ -621,9 +621,12 @@ def generate_one(
         if variants:
             encode_list = variants
         if loras:
-            specs = [Path(path).name for path, _ in loras]
+            specs = [lora_name(path) for path, _ in loras]
             encode_list = [apply_triggers(variant, specs) for variant in encode_list]
-        prompt_embeds = encode_prompts(pipe, encode_list)[prompt]
+            encode_key = apply_triggers(prompt, specs)
+        else:
+            encode_key = prompt
+        prompt_embeds = encode_prompts(pipe, encode_list)[encode_key]
         prompt = None
     try:
         return run_on_pipe(

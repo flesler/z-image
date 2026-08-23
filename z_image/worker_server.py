@@ -68,9 +68,9 @@ def job_monitor_enabled() -> bool:
 def resolve_loras(entries: list[dict]) -> list[tuple[str, float]]:
     resolved = []
     for entry in entries:
-        file = entry["file"]
+        name = entry.get("name") or entry.get("file", "")
         strength = float(entry.get("strength", 1.0))
-        path = resolve_path(file, LORAS_DIR)
+        path = resolve_path(name, LORAS_DIR)
         resolved.append((str(path), strength))
     return resolved
 
@@ -168,6 +168,7 @@ def run_generate_job(body: dict) -> dict:
     img_strength = float(strength) if strength is not None else None
 
     if "output" not in body:
+        lora_names = [entry.get("name") or entry.get("file") for entry in lora_entries] or None
         filename = output_filename(
             save_prompt,
             width,
@@ -175,6 +176,7 @@ def run_generate_job(body: dict) -> dict:
             seed,
             steps,
             strength=img_strength if body.get("image") else None,
+            lora_names=lora_names,
         )
         body["output"] = str(gallery_root() / filename)
 
@@ -182,7 +184,7 @@ def run_generate_job(body: dict) -> dict:
     precision = resolve_precision(body.get("precision"))
     loras = resolve_loras(lora_entries)
     meta_loras = (
-        [(entry["file"], float(entry.get("strength", 1.0))) for entry in lora_entries]
+        [(entry.get("name") or entry.get("file"), float(entry.get("strength", 1.0))) for entry in lora_entries]
         if lora_entries
         else None
     )

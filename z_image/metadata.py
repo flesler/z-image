@@ -7,6 +7,8 @@ from pathlib import Path
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
+from .loras import lora_name
+
 MODEL_NAME = "Z-Image-Turbo"
 SAMPLER = "Flow Match"
 NEGATIVE_PROMPT_MARKER = "Negative prompt:"
@@ -29,7 +31,7 @@ class GenMeta:
 def _lora_names(loras: list[tuple[str, float]]) -> str:
     names: list[str] = []
     for path_or_name, _ in loras:
-        name = Path(path_or_name).name.removesuffix(".safetensors")
+        name = lora_name(path_or_name)
         if name and name not in names:
             names.append(name)
     return ", ".join(names)

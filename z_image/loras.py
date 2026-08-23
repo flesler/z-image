@@ -11,15 +11,11 @@ from .sizes import snap_dim
 
 @dataclass(frozen=True)
 class LoraSpec:
-    file: str
+    name: str
     strength: float
 
-    @property
-    def name(self) -> str:
-        return self.file.removesuffix(".safetensors")
-
     def __str__(self) -> str:
-        return f"{self.file}:{self.strength}"
+        return f"{self.name}:{self.strength}"
 
 
 def random_seed() -> int:
@@ -33,11 +29,13 @@ def normalize_prompt(prompt: str) -> str:
         prompt = prompt.replace("\\n", "\n")
     return prompt
 
-def normalize_filename(name: str) -> str:
-    base = Path(name).name
-    if not base.endswith(".safetensors"):
-        base += ".safetensors"
-    return base
+
+def lora_name(name: str) -> str:
+    return Path(name).name.removesuffix(".safetensors")
+
+
+def lora_filename(name: str) -> str:
+    return f"{lora_name(name)}.safetensors"
 
 
 def load_catalog(path: Path | None = None) -> dict:
@@ -52,18 +50,17 @@ def list_catalog_entries(catalog: dict | None = None) -> list[dict]:
     catalog = catalog if catalog is not None else load_catalog()
     root = loras_dir()
     rows: list[dict] = []
-    for file in sorted(catalog.keys()):
-        norm = normalize_filename(file)
-        entry = catalog_entry(catalog, norm)
+    for key in sorted(catalog.keys()):
+        name = lora_name(key)
+        entry = catalog_entry(catalog, name)
         available = False
         try:
-            resolve_path(norm, root)
+            resolve_path(name, root)
             available = True
         except FileNotFoundError:
             pass
         row = {
-            "file": norm,
-            "name": norm.removesuffix(".safetensors"),
+            "name": name,
             "default_strength": float(entry.get("default_strength", 1.0)),
             "trigger": (entry.get("trigger") or "").strip(),
             "available": available,
@@ -78,26 +75,26 @@ def list_catalog_entries(catalog: dict | None = None) -> list[dict]:
 
 
 def catalog_entry(catalog: dict, name: str) -> dict:
-    file = normalize_filename(name)
-    return catalog.get(file) or catalog.get(file.removesuffix(".safetensors"), {})
+    return catalog.get(lora_name(name), {})
 
 
 def resolve_spec(spec: str, catalog: dict | None = None) -> LoraSpec:
     catalog = catalog if catalog is not None else load_catalog()
-    file, _, strength_str = spec.partition(":")
-    file = normalize_filename(file)
-    default = float(catalog_entry(catalog, file).get("default_strength", 1.0))
+    raw, _, strength_str = spec.partition(":")
+    name = lora_name(raw)
+    default = float(catalog_entry(catalog, name).get("default_strength", 1.0))
     strength = float(strength_str) if strength_str else default
-    return LoraSpec(file=file, strength=strength)
+    return LoraSpec(name=name, strength=strength)
 
 
-def resolve_path(file: str, root: Path | None = None) -> Path:
+def resolve_path(name: str, root: Path | None = None) -> Path:
     root = root or loras_dir()
-    normalized = normalize_filename(file)
-    for candidate in (Path(file), root / normalized):
+    filename = lora_filename(name)
+    stem = lora_name(name)
+    for candidate in (Path(name), root / filename, root / stem):
         if candidate.is_file():
             return candidate.resolve()
-    raise FileNotFoundError(f"LoRA not found: {file}")
+    raise FileNotFoundError(f"LoRA not found: {stem}")
 
 
 def apply_triggers(prompt: str, specs: list[str], catalog: dict | None = None) -> str:
@@ -118,12 +115,7 @@ def apply_triggers(prompt: str, specs: list[str], catalog: dict | None = None) -
 
 
 def filter_names(filters: list[str]) -> set[str]:
-    names: set[str] = set()
-    for spec in filters:
-        file = normalize_filename(spec.split(":", 1)[0])
-        names.add(file)
-        names.add(file.removesuffix(".safetensors"))
-    return names
+    return {lora_name(spec.split(":", 1)[0]) for spec in filters}
 
 
 def expand_lora_specs(specs: list[str], catalog: dict | None = None) -> list[str]:
@@ -138,19 +130,19 @@ def expand_lora_specs(specs: list[str], catalog: dict | None = None) -> list[str
     seen: set[str] = set()
 
     def add(spec: str) -> None:
-        key = normalize_filename(spec.split(":", 1)[0])
-        if key in seen:
+        name = lora_name(spec.split(":", 1)[0])
+        if name in seen:
             return
-        seen.add(key)
-        expanded.append(spec)
+        seen.add(name)
+        expanded.append(name if ":" not in spec else f"{name}:{spec.split(':', 1)[1]}")
 
-    for file in sorted(catalog.keys()):
-        norm = normalize_filename(file)
+    for key in sorted(catalog.keys()):
+        name = lora_name(key)
         try:
-            resolve_path(norm)
+            resolve_path(name)
         except FileNotFoundError:
             continue
-        add(norm.removesuffix(".safetensors"))
+        add(name)
 
     for spec in named:
         add(spec)
@@ -169,13 +161,14 @@ def benchmark_plan(
     names = filter_names(filters or [])
     rows: list[tuple[str, str, int]] = []
     idx = 0
-    for file, entry in catalog.items():
-        if names and Path(file).name not in names and file not in names:
+    for key, entry in catalog.items():
+        name = lora_name(key)
+        if names and name not in names:
             continue
         prompts = entry.get("prompts") or []
         if not prompts:
             continue
         for prompt in prompts:
-            rows.append((file, normalize_prompt(prompt), seed_base + idx * (repeat + 1)))
+            rows.append((name, normalize_prompt(prompt), seed_base + idx * (repeat + 1)))
             idx += 1
     return rows

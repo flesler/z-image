@@ -13,6 +13,17 @@ def slugify(text: str, max_len: int = SLUG_MAX) -> str:
     return slug[:max_len]
 
 
+def lora_slug(names: list[str] | None) -> str | None:
+    if not names:
+        return None
+    from .loras import lora_name
+
+    stems = [lora_name(name) for name in names]
+    if len(stems) == 1:
+        return slugify(stems[0])
+    return slugify("+".join(stems))
+
+
 def batch_stem(
     prompt: str,
     width: int,
@@ -21,9 +32,15 @@ def batch_stem(
     steps: int | None = None,
     *,
     strength: float | None = None,
+    lora_names: list[str] | None = None,
 ) -> str:
     resolved = resolve_steps(steps)
-    base = f"{slugify(prompt)}-{width}x{height}-{seed}"
+    parts = [slugify(prompt), f"{width}x{height}"]
+    lora = lora_slug(lora_names)
+    if lora:
+        parts.append(lora)
+    parts.append(str(seed))
+    base = "-".join(parts)
     if resolved != resolve_steps(None):
         base += f"-s{resolved}"
     if strength is not None:
@@ -39,8 +56,9 @@ def output_filename(
     steps: int | None = None,
     *,
     strength: float | None = None,
+    lora_names: list[str] | None = None,
 ) -> str:
-    return f"{batch_stem(prompt, width, height, seed, steps, strength=strength)}.png"
+    return f"{batch_stem(prompt, width, height, seed, steps, strength=strength, lora_names=lora_names)}.png"
 
 
 def batch_list_glob(prompt: str, width: int, height: int) -> str:

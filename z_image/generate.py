@@ -37,6 +37,9 @@ def run_generate(
         img_strength = resolve_strength(strength)
         load_init_image(image, width=width, height=height)
 
+    resolved_loras: list[LoraSpec] = [resolve_spec(spec) for spec in loras]
+    lora_names = [spec.name for spec in resolved_loras] or None
+
     if output is None:
         out_dir = output_dir()
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -47,6 +50,7 @@ def run_generate(
             seed,
             steps,
             strength=img_strength,
+            lora_names=lora_names,
         )
 
     log(f"seed: {seed}")
@@ -54,7 +58,6 @@ def run_generate(
         log(f"img2img: {image} strength={img_strength:g}")
     log(f"→ {output}")
 
-    resolved_loras: list[LoraSpec] = [resolve_spec(spec) for spec in loras]
     if loras:
         log(f"prompt: {resolved.prompt}")
 

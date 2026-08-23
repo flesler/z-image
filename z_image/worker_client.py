@@ -96,7 +96,7 @@ def generate_via_worker(
         "width": width,
         "height": height,
         "seed": seed,
-        "loras": [{"file": spec.file, "strength": spec.strength} for spec in loras],
+        "loras": [{"name": spec.name, "strength": spec.strength} for spec in loras],
     }
     if seed_base is not None:
         payload["seed_base"] = seed_base
@@ -190,7 +190,7 @@ def generate_cold(
     from zimage.engine import generate_image
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    lora_paths = [(str(resolve_path(spec.file)), spec.strength) for spec in loras]
+    lora_paths = [(str(resolve_path(spec.name)), spec.strength) for spec in loras]
     image = generate_image(
         prompt=prompt,
         steps=steps,

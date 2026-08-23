@@ -239,6 +239,7 @@ def _run_one_batch(
                     resolved = resolve_prompt(prompt, iter_seed, base_seed=seed_base)
                     final_prompt = apply_triggers(resolved.prompt, [str(spec) for spec in lora_specs])
                     name_steps = None if preview else step_count
+                    lora_names = [spec.name for spec in lora_specs] or None
                     stem = batch_stem(
                         resolved.prompt,
                         width,
@@ -246,8 +247,12 @@ def _run_one_batch(
                         iter_seed,
                         name_steps,
                         strength=img_strength,
+                        lora_names=lora_names,
                     )
-                    output = root / batch_filename(stem, variant)
+                    if variant == "base":
+                        output = root / batch_filename(stem, variant)
+                    else:
+                        output = root / f"{stem}.png"
 
                     step_label = f" s{step_count}" if len(steps_list) > 1 else ""
                     if not override and output.is_file():
@@ -268,7 +273,7 @@ def _run_one_batch(
                             "output": str(output),
                             "seed": iter_seed,
                             "steps": step_count,
-                            "loras": [{"file": spec.file, "strength": spec.strength} for spec in lora_specs],
+                            "loras": [{"name": spec.name, "strength": spec.strength} for spec in lora_specs],
                         }
                     )
                     outputs.append(output)

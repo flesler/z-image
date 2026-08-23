@@ -16,7 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from z_image.config import LORAS_JSON
-from z_image.loras import load_catalog, normalize_filename
+from z_image.loras import load_catalog, lora_name
 from z_image.sizes import snap_dim
 
 _VERSION_RE = re.compile(r"modelVersionId=(\d+)")
@@ -86,11 +86,9 @@ def main() -> None:
     elif args.lora:
         keys = []
         for spec in args.lora:
-            norm = normalize_filename(spec)
-            if norm in catalog:
-                keys.append(norm)
-            elif norm.removesuffix(".safetensors") in catalog:
-                keys.append(norm.removesuffix(".safetensors"))
+            name = lora_name(spec)
+            if name in catalog:
+                keys.append(name)
             else:
                 raise SystemExit(f"unknown lora: {spec}")
     else:

@@ -1,5 +1,5 @@
 {
-  "DarkGhibliZ.safetensors": {
+  "DarkGhibliZ": {
     "url": "https://civitai.com/models/1349631/dark-ghibli-fairytales?modelVersionId=2500043",
     "trigger": "Studio Ghibli Dark Fairytale",
     "default_strength": 0.85,
@@ -12,7 +12,7 @@
     "width": 1024,
     "height": 1024
   },
-  "RealisticSnapshot-Zimage-Turbov5.safetensors": {
+  "RealisticSnapshot-Zimage-Turbov5": {
     "trigger": "",
     "default_strength": 0.65,
     "prompts": [
@@ -24,7 +24,7 @@
     "width": 1024,
     "height": 1024
   },
-  "Purple_grainy_zit.safetensors": {
+  "Purple_grainy_zit": {
     "url": "https://civitai.com/models/2329053/purple-grainy-oror-photography-lora?modelVersionId=2619939",
     "trigger": "",
     "default_strength": 1.0,
@@ -37,7 +37,7 @@
     "width": 896,
     "height": 1248
   },
-  "ZiTMythG0thicL1nes.safetensors": {
+  "ZiTMythG0thicL1nes": {
     "url": "https://civitai.com/models/599757/velvets-mythic-fantasy-styles-or-flux-pony-illustrious-zit-anima-krea2?modelVersionId=2924569",
     "trigger": "G0thicL1nes",
     "default_strength": 0.8,
@@ -50,7 +50,7 @@
     "width": 2176,
     "height": 2880
   },
-  "ZiTMythR3alisticF.safetensors": {
+  "ZiTMythR3alisticF": {
     "url": "https://civitai.com/models/599757/velvets-mythic-fantasy-styles-or-flux-pony-illustrious-zit-anima-krea2?modelVersionId=2547883",
     "trigger": "R3alisticF",
     "default_strength": 0.8,
@@ -63,7 +63,7 @@
     "width": 1088,
     "height": 1440
   },
-  "MidJourneyNSFWZ.safetensors": {
+  "MidJourneyNSFWZ": {
     "url": "https://civitai.com/models/837884/midjourney-artful-nsfw?modelVersionId=2599899",
     "trigger": "ArtfulNSFW",
     "default_strength": 0.8,
@@ -73,7 +73,7 @@
     "width": 1024,
     "height": 1024
   },
-  "painting_zimage_v1.safetensors": {
+  "painting_zimage_v1": {
     "url": "https://civitai.com/models/2352385/we-paint?modelVersionId=2645785",
     "trigger": "",
     "default_strength": 1.0,
@@ -85,7 +85,7 @@
     "width": 832,
     "height": 1216
   },
-  "ZIT_3xperiment0.safetensors": {
+  "ZIT_3xperiment0": {
     "url": "https://civitai.com/models/2259580/ta863xperiment0?modelVersionId=2546573",
     "trigger": "",
     "default_strength": 0.4,
@@ -99,7 +99,7 @@
     "width": 832,
     "height": 1216
   },
-  "CandidInstaxphotoZ.safetensors": {
+  "CandidInstaxphotoZ": {
     "url": "https://civitai.com/models/1683324?modelVersionId=2597365",
     "trigger": "Candid Instax Photo",
     "default_strength": 0.8,
@@ -112,7 +112,7 @@
     "width": 896,
     "height": 1344
   },
-  "Retro80sVaporwaveZ.safetensors": {
+  "Retro80sVaporwaveZ": {
     "url": "https://civitai.com/models/1989095/retro-80s-vaporwave?modelVersionId=2473042",
     "trigger": "Retro 80s Vaporwave",
     "default_strength": 0.8,
@@ -125,7 +125,7 @@
     "width": 1024,
     "height": 1024
   },
-  "TinyThings2ZIT.safetensors": {
+  "TinyThings2ZIT": {
     "url": "https://civitai.com/models/2313869/tiny-things?modelVersionId=2611795",
     "trigger": "TinyDaal",
     "default_strength": 1.0,
@@ -138,7 +138,7 @@
     "width": 768,
     "height": 1280
   },
-  "StorybookFolkArtZ.safetensors": {
+  "StorybookFolkArtZ": {
     "url": "https://civitai.com/models/1321740/storybook-folk-art?modelVersionId=2507592",
     "trigger": "4rt. Whimsical, storybook-inspired folk art with flowing, dreamlike details.",
     "default_strength": 0.8,
