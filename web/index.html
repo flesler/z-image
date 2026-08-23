@@ -734,6 +734,17 @@
       return null;
     }
 
+    function resolveRunStartSeed(mode) {
+      const userSeed = parseSeedInput($('seed').value);
+      if (usesNextSeed(mode) && lastSeed != null && (userSeed == null || userSeed === lastSeed)) {
+        return lastSeed + 1;
+      }
+      if (userSeed != null) {
+        return userSeed;
+      }
+      return startSeedForMode(mode);
+    }
+
     function applySeedToPayload(payload, { seed, seedBase }) {
       if (seed != null) {
         payload.seed = seed;
@@ -952,7 +963,7 @@
       updateViewerPrompt(cached.meta);
     }
 
-    function updateViewer({ scrollGallery = false } = {}) {
+    async function updateViewer({ scrollGallery = false } = {}) {
       const img = $('preview');
       const empty = $('empty');
       const meta = $('preview-meta');
@@ -980,26 +991,26 @@
       img.alt = item.name;
       meta.textContent = `${item.name} · ${formatDate(item.created_at)}`;
       counter.textContent = `${index + 1} / ${images.length}`;
-      loadViewerImage(item);
+      await loadViewerImage(item);
       if (scrollGallery) scrollToGallery();
     }
 
     function step(delta) {
       if (!images.length) return;
       index = (index + delta + images.length) % images.length;
-      updateViewer({ scrollGallery: true });
+      void updateViewer({ scrollGallery: true });
     }
 
     function goFirst() {
       if (!images.length) return;
       index = 0;
-      updateViewer({ scrollGallery: true });
+      void updateViewer({ scrollGallery: true });
     }
 
     function goLast() {
       if (!images.length) return;
       index = images.length - 1;
-      updateViewer({ scrollGallery: true });
+      void updateViewer({ scrollGallery: true });
     }
 
     function isFormFieldFocused() {
@@ -1032,7 +1043,7 @@
       }
     }
 
-    function focusImage(path, { scrollGallery = true } = {}) {
+    async function focusImage(path, { scrollGallery = true } = {}) {
       const existing = images.findIndex((item) => item.path === path);
       if (existing >= 0) {
         index = existing;
@@ -1045,7 +1056,7 @@
         });
         index = 0;
       }
-      updateViewer({ scrollGallery });
+      await updateViewer({ scrollGallery });
     }
 
     async function loadGallery({ keepPath, scrollGallery = false } = {}) {
@@ -1056,11 +1067,21 @@
       images = data.images || [];
       if (focused) {
         const idx = images.findIndex((item) => item.path === focused);
-        index = idx >= 0 ? idx : 0;
+        if (idx >= 0) {
+          index = idx;
+        } else {
+          images.unshift({
+            name: focused.split('/').pop(),
+            path: focused,
+            created_at: Date.now() / 1000,
+            size: 0,
+          });
+          index = 0;
+        }
       } else if (index >= images.length) {
         index = 0;
       }
-      updateViewer({ scrollGallery });
+      await updateViewer({ scrollGallery });
     }
 
     async function revealInGallery(path) {
@@ -1070,7 +1091,6 @@
         imageCache.delete(path);
       }
       await loadGallery({ keepPath: path });
-      focusImage(path);
     }
 
     async function generateOne(payload, { focus = true } = {}) {
@@ -1132,9 +1152,8 @@
       try {
         let last = null;
         let done = 0;
-        const userSeed = parseSeedInput($('seed').value);
-        let nextSeed = userSeed != null ? userSeed : startSeedForMode(mode);
-        const batchSeedBase = count > 1 && nextSeed != null ? nextSeed : null;
+        const runStartSeed = resolveRunStartSeed(mode);
+        const batchSeedBase = count > 1 && runStartSeed != null ? runStartSeed : null;
         let randomBatchBase = null;
         let openedExisting = false;
 
@@ -1149,15 +1168,19 @@
           }
 
           let slotDone = false;
+          let slotBump = 0;
           for (let attempt = 0; attempt < MAX_DUP_ATTEMPTS; attempt++) {
             const payload = { ...basePayload };
-            let trySeed = nextSeed;
-            if (trySeed == null && i > 0 && randomBatchBase != null) {
-              trySeed = randomBatchBase + i;
+            let trySeed = null;
+            if (runStartSeed != null) {
+              trySeed = runStartSeed + i + slotBump;
+            } else if (randomBatchBase != null) {
+              trySeed = randomBatchBase + i + slotBump;
             }
+            const anchor = batchSeedBase ?? (count > 1 ? randomBatchBase : null);
             applySeedToPayload(payload, {
               seed: trySeed,
-              seedBase: batchSeedBase ?? (i > 0 ? randomBatchBase : null),
+              seedBase: anchor,
             });
 
             last = await generateOne(payload, { focus: false });
@@ -1168,24 +1191,23 @@
               }
               openedExisting = Boolean(last.skipped);
               lastSeed = last.seed;
-              nextSeed = last.seed + 1;
               slotDone = true;
               break;
             }
 
             if (last.skipped) {
-              nextSeed = (trySeed ?? last.seed) + 1;
+              slotBump += 1;
               continue;
+            }
+
+            if (randomBatchBase == null && last.seed != null && runStartSeed == null) {
+              randomBatchBase = last.seed - i;
             }
 
             if (last.gallery_path) {
               await revealInGallery(last.gallery_path);
             }
             lastSeed = last.seed;
-            nextSeed = last.seed + 1;
-            if (randomBatchBase == null && i === 0 && trySeed == null) {
-              randomBatchBase = last.seed;
-            }
             slotDone = true;
             break;
           }
