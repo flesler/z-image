@@ -22,6 +22,13 @@ def pipe_device(pipe: ZImagePipeline) -> torch.device:
     return next(pipe.transformer.parameters()).device
 
 
+def _cuda_free_bytes() -> int:
+    if not torch.cuda.is_available():
+        return 0
+    free, _ = torch.cuda.mem_get_info()
+    return int(free)
+
+
 def release_text_encoder(pipe: ZImagePipeline) -> None:
     if cpu_offload_enabled() or pipe.text_encoder is None:
         return
@@ -47,6 +54,9 @@ def ensure_text_encoder(pipe: ZImagePipeline) -> None:
     from transformers import AutoModelForCausalLM
 
     _log("loading text encoder")
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     text_encoder = AutoModelForCausalLM.from_pretrained(
         model_id,
         subfolder="text_encoder",
@@ -54,11 +64,20 @@ def ensure_text_encoder(pipe: ZImagePipeline) -> None:
         low_cpu_mem_usage=True,
     )
     if triton_is_available and torch.cuda.is_available():
-        text_encoder = apply_sdnq_options_to_model(text_encoder, use_quantized_matmul=True)
+        free = _cuda_free_bytes()
+        if free < 2 * 1024**3:
+            _log(f"low VRAM ({free / 1024**3:.1f}GiB free) — text encoder without Triton matmul")
+        else:
+            text_encoder = apply_sdnq_options_to_model(text_encoder, use_quantized_matmul=True)
     pipe.text_encoder = text_encoder.to("cuda")
 
 
-def encode_prompts(pipe: ZImagePipeline, prompts: Iterable[str]) -> dict[str, list[torch.Tensor]]:
+def encode_prompts(
+    pipe: ZImagePipeline,
+    prompts: Iterable[str],
+    *,
+    release_after: bool = True,
+) -> dict[str, list[torch.Tensor]]:
     unique = list(dict.fromkeys(prompts))
     if not unique:
         return {}

@@ -98,6 +98,10 @@ def install(*, log: Callable[[str], None] | None = None) -> None:
     real_offload = ZImagePipeline.enable_model_cpu_offload
 
     def load_pipeline_fast_gpu(device=None, precision="q4"):
+        cached = getattr(engine, "_cached_pipe", None)
+        if cached is not None:
+            release_text_encoder(cached)
+
         def noop_offload(self, *args, **kwargs):
             return self
 

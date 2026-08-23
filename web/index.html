@@ -23,7 +23,7 @@
 
     body.portrait {
       overflow-y: auto;
-      scroll-snap-type: y mandatory;
+      -webkit-overflow-scrolling: touch;
     }
 
     .shell {
@@ -63,8 +63,6 @@
       width: 100%;
       flex: 0 0 100dvh;
       height: 100dvh;
-      scroll-snap-align: start;
-      scroll-snap-stop: always;
       border-radius: 0;
       border-left: 0;
       border-right: 0;
@@ -83,8 +81,6 @@
     body.portrait .gallery-panel {
       flex: 0 0 100dvh;
       height: 100dvh;
-      scroll-snap-align: start;
-      scroll-snap-stop: always;
       border-radius: 0;
     }
 
@@ -342,6 +338,16 @@
       line-height: 1;
       cursor: pointer;
       z-index: 2;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    @media (pointer: coarse) {
+      .nav-btn {
+        width: 3em;
+        height: 3em;
+        font-size: 1.4em;
+      }
     }
 
     .nav-btn:hover { background: rgba(0,0,0,0.65); }
@@ -483,7 +489,20 @@
 
     const PREVIEW_STEPS = 3;
     const REFINED_STEPS = 8;
+    const VAE_ALIGN = 16;
     const FORM_STORAGE_KEY = 'z-image-form';
+    let portraitPanel = 0;
+    let touchStartY = 0;
+
+    function snapDim(value) {
+      const n = parseInt(value, 10) || 1024;
+      return Math.max(VAE_ALIGN, Math.round(n / VAE_ALIGN) * VAE_ALIGN);
+    }
+
+    function snapSizeFields() {
+      $('width').value = snapDim($('width').value);
+      $('height').value = snapDim($('height').value);
+    }
 
     function readFormState() {
       return {
@@ -547,22 +566,70 @@
     }
 
     function updatePortraitLayout() {
-      document.body.classList.toggle('portrait', window.innerHeight > window.innerWidth);
+      const portrait = window.innerHeight > window.innerWidth;
+      document.body.classList.toggle('portrait', portrait);
+      if (portrait) {
+        syncPortraitPanel();
+      }
+      updateScrollJumpBtn();
+    }
+
+    function panelScrollTop(panel) {
+      return window.scrollY + panel.getBoundingClientRect().top;
+    }
+
+    function scrollToPanel(index, { smooth = true } = {}) {
+      if (!document.body.classList.contains('portrait')) {
+        return;
+      }
+      portraitPanel = index;
+      const panel = index === 0 ? $('form-panel') : $('gallery-panel');
+      const top = Math.round(panelScrollTop(panel));
+      window.scrollTo({ top, left: 0, behavior: smooth ? 'smooth' : 'auto' });
       updateScrollJumpBtn();
     }
 
     function scrollToForm() {
-      if (!document.body.classList.contains('portrait')) return;
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToPanel(0);
     }
 
     function scrollToGallery() {
-      if (!document.body.classList.contains('portrait')) return;
-      $('gallery-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollToPanel(1);
+    }
+
+    function syncPortraitPanel() {
+      if (!document.body.classList.contains('portrait')) {
+        return;
+      }
+      const mid = window.scrollY + window.innerHeight * 0.35;
+      const galleryTop = panelScrollTop($('gallery-panel'));
+      portraitPanel = mid >= galleryTop ? 1 : 0;
     }
 
     function isOnGalleryPanel() {
-      return window.scrollY > window.innerHeight * 0.4;
+      return portraitPanel === 1;
+    }
+
+    function onPortraitTouchStart(e) {
+      if (!document.body.classList.contains('portrait')) {
+        return;
+      }
+      touchStartY = e.touches[0].clientY;
+    }
+
+    function onPortraitTouchEnd(e) {
+      if (!document.body.classList.contains('portrait')) {
+        return;
+      }
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dy) < 40) {
+        return;
+      }
+      if (dy < 0 && portraitPanel === 0) {
+        scrollToGallery();
+      } else if (dy > 0 && portraitPanel === 1) {
+        scrollToForm();
+      }
     }
 
     function updateScrollJumpBtn() {
@@ -747,6 +814,7 @@
       if (meta.prompt) $('prompt').value = meta.prompt;
       if (meta.width) $('width').value = meta.width;
       if (meta.height) $('height').value = meta.height;
+      snapSizeFields();
       $('lora').value = formatLorasForForm(meta.lora);
       if (meta.seed != null) {
         lastSeed = meta.seed;
@@ -984,6 +1052,7 @@
       if (!prompt) return;
 
       saveFormState();
+      snapSizeFields();
 
       const count = Math.max(1, Math.min(50, parseInt($('count').value, 10) || 1));
       const loras = parseLoras($('lora').value);
@@ -1103,8 +1172,15 @@
     $('prev-btn').addEventListener('click', () => step(-1));
     $('next-btn').addEventListener('click', () => step(1));
     $('scroll-jump-btn').addEventListener('click', onScrollJumpClick);
+    $('width').addEventListener('change', () => { snapSizeFields(); updatePortraitLayout(); });
+    $('height').addEventListener('change', () => { snapSizeFields(); updatePortraitLayout(); });
     window.addEventListener('resize', updatePortraitLayout);
-    window.addEventListener('scroll', updateScrollJumpBtn, { passive: true });
+    window.addEventListener('scroll', () => {
+      syncPortraitPanel();
+      updateScrollJumpBtn();
+    }, { passive: true });
+    document.addEventListener('touchstart', onPortraitTouchStart, { passive: true });
+    document.addEventListener('touchend', onPortraitTouchEnd, { passive: true });
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'End' && (e.ctrlKey || e.metaKey)) {

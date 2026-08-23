@@ -36,6 +36,13 @@ def snap_dim(value: float) -> int:
     return max(VAE_ALIGN, round(value / VAE_ALIGN) * VAE_ALIGN)
 
 
+def require_vae_aligned(value: int, *, name: str = "dimension") -> int:
+    value = int(value)
+    if value % VAE_ALIGN != 0:
+        raise ValueError(f"{name} must be divisible by {VAE_ALIGN} (got {value})")
+    return value
+
+
 def resolve_aspect_base(base: int) -> int:
     if base == 1080:
         return snap_dim(1080)

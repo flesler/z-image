@@ -16,7 +16,7 @@ from PIL import Image
 from .config import default_precision, load_pipeline
 from .exceptions import ClientDisconnected
 from .metadata import GenMeta, save_image
-from .text_encoder import encode_prompts, pipe_device, release_text_encoder
+from .text_encoder import encode_prompts, pipe_device
 
 
 def _load_loras(pipe, loras: list[tuple[str, float]] | None) -> None:
@@ -61,7 +61,6 @@ def recover_pipe(pipe) -> None:
         pipe.transformer.unload_lora()
     except Exception:
         pass
-    release_text_encoder(pipe)
     scheduler = getattr(pipe, "scheduler", None)
     if scheduler is not None:
         if hasattr(scheduler, "set_begin_index"):
@@ -364,7 +363,6 @@ def prepare_loaded_pipe(pipe, *, reloaded: bool = False) -> None:
         pipe.set_progress_bar_config(disable=True)
     if hasattr(pipe, "disable_attention_slicing"):
         pipe.disable_attention_slicing()
-    release_text_encoder(pipe)
 
 
 def run_batch_on_pipe(

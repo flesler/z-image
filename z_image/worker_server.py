@@ -34,6 +34,7 @@ from .caption import caption_image, caption_model_device, unload_caption_model
 from .gallery import gallery_root, list_images, open_gallery_file
 from .metadata import read_prompt
 from .naming import output_filename
+from .sizes import require_vae_aligned
 from .exceptions import ClientDisconnected
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
 from .init_image import load_init_image
@@ -43,7 +44,6 @@ from .pipeline_cache import IdleGuard, current_pipe
 from .metadata import GenMeta, save_image
 from .pipeline_jobs import generate_one, recover_pipe, run_batch_on_pipe
 from .prompt_embed_cache import prune, remove_legacy_layout
-from .text_encoder import release_text_encoder
 
 apply_env()
 ensure_gpu_pipeline_patch()
@@ -128,8 +128,8 @@ def _seed_from_filename(name: str) -> int | None:
 
 def run_generate_job(body: dict) -> dict:
     prompt = body["prompt"]
-    width = int(body.get("width", 1024))
-    height = int(body.get("height", 1024))
+    width = require_vae_aligned(int(body.get("width", 1024)), name="width")
+    height = require_vae_aligned(int(body.get("height", 1024)), name="height")
     seed = body.get("seed")
     if seed is None:
         seed = random.randint(0, 2**31 - 1)
@@ -239,8 +239,8 @@ def run_generate_batch(body: dict, *, on_image=None) -> dict:
     if not jobs:
         raise ValueError("jobs must not be empty")
 
-    width = int(body.get("width", 1024))
-    height = int(body.get("height", 1024))
+    width = require_vae_aligned(int(body.get("width", 1024)), name="width")
+    height = require_vae_aligned(int(body.get("height", 1024)), name="height")
     precision = resolve_precision(body.get("precision"))
     init_image = None
     strength = None
@@ -529,7 +529,6 @@ def main() -> None:
 
     log(f"warming up precision={precision}")
     load_pipeline(precision=precision)
-    release_text_encoder(current_pipe())
     log_pipe(current_pipe(), label="warmup")
     _idle_guard.start()
     root = gallery_root()
