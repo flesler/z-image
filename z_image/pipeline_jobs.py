@@ -15,6 +15,7 @@ from PIL import Image
 
 from .config import default_precision, load_pipeline
 from .exceptions import ClientDisconnected
+from .log import log as write_log
 from .metadata import GenMeta, save_image
 from .text_encoder import encode_prompts, pipe_device
 
@@ -50,7 +51,7 @@ def _unload_loras(pipe, loras: list[tuple[str, float]] | None) -> None:
     try:
         pipe.transformer.unload_lora()
     except Exception as e:
-        print(f"[worker] failed to unload LoRA: {e}", flush=True)
+        write_log(f"failed to unload LoRA: {e}", tag="worker")
 
 
 def recover_pipe(pipe) -> None:
@@ -114,6 +115,46 @@ def _collapse_step_jobs(model_jobs: list[dict], job_steps: Callable[[dict], int]
             }
         )
     return collapsed
+
+
+def _lora_specs_from_job(job: dict) -> list[str]:
+    specs: list[str] = []
+    for entry in job.get("loras") or []:
+        if isinstance(entry, dict):
+            specs.append(entry["file"])
+        else:
+            specs.append(str(entry))
+    return specs
+
+
+def _encode_prompts_for_jobs(jobs: list[dict]) -> list[str]:
+    from .loras import apply_triggers
+    from .templates import all_variants
+
+    prompts: list[str] = []
+    seen: set[str] = set()
+    expanded: set[tuple[str, tuple[str, ...]]] = set()
+
+    for job in jobs:
+        template = job.get("template")
+        if template:
+            key = (template, tuple(_lora_specs_from_job(job)))
+            if key not in expanded:
+                variants = all_variants(template)
+                expanded.add(key)
+                if variants:
+                    specs = list(key[1])
+                    for variant in variants:
+                        text = apply_triggers(variant, specs) if specs else variant
+                        if text not in seen:
+                            seen.add(text)
+                            prompts.append(text)
+                    continue
+        prompt = job["prompt"]
+        if prompt not in seen:
+            seen.add(prompt)
+            prompts.append(prompt)
+    return prompts
 
 
 def _latents_to_pil(pipe, latents):
@@ -394,7 +435,7 @@ def run_batch_on_pipe(
     def job_steps(job: dict) -> int:
         return int(job["steps"])
 
-    emit = log or (lambda msg: print(msg, file=sys.stderr, flush=True))
+    emit = log or (lambda msg: write_log(msg))
     model_groups: OrderedDict[tuple[tuple[str, float], ...], list[dict]] = OrderedDict()
     for job in jobs:
         key = _lora_key(job.get("loras") or None)
@@ -409,7 +450,7 @@ def run_batch_on_pipe(
         + (f", strength {strength:g}" if init_image is not None and strength is not None else "")
     )
 
-    all_prompts = list(dict.fromkeys(job["prompt"] for job in jobs))
+    all_prompts = _encode_prompts_for_jobs(jobs)
     t0 = time.perf_counter()
     emit(f"encode {len(all_prompts)} unique prompt(s)")
     t_enc = time.perf_counter()
@@ -565,13 +606,24 @@ def generate_one(
     seed: int,
     loras: list[tuple[str, float]] | None,
     prompt: str | None = None,
+    template: str | None = None,
     prompt_embeds: list[torch.Tensor] | None = None,
     init_image: Image.Image | None = None,
     strength: float | None = None,
 ):
     pipe = load_pipeline(precision=precision)
     if prompt is not None and prompt_embeds is None:
-        prompt_embeds = encode_prompts(pipe, [prompt])[prompt]
+        from .loras import apply_triggers
+        from .templates import all_variants
+
+        encode_list = [prompt]
+        variants = all_variants(template) if template else None
+        if variants:
+            encode_list = variants
+            if loras:
+                specs = [str(path) for path, _ in loras]
+                encode_list = [apply_triggers(variant, specs) for variant in encode_list]
+        prompt_embeds = encode_prompts(pipe, encode_list)[prompt]
         prompt = None
     try:
         return run_on_pipe(

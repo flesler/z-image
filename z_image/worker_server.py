@@ -53,8 +53,11 @@ _idle_guard = IdleGuard()
 WEB_UI = ROOT / "web" / "index.html"
 
 
+from .log import log as tslog
+
+
 def log(msg: str) -> None:
-    print(f"[worker] {msg}", file=sys.stderr, flush=True)
+    tslog(msg, tag="worker")
 
 
 def job_monitor_enabled() -> bool:
@@ -194,6 +197,7 @@ def run_generate_job(body: dict) -> dict:
     try:
         image = generate_one(
             prompt=prompt,
+            template=template,
             steps=steps,
             width=width,
             height=height,

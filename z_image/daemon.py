@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from .config import PIDFILE, ROOT, VENV_BIN, apply_env, default_precision, worker_log, worker_port
+from .log import log as tslog
 from .worker_client import is_healthy
 
 
@@ -27,17 +28,17 @@ def cmd_start() -> int:
         except OSError:
             PIDFILE.unlink(missing_ok=True)
         else:
-            print(f"worker pid {old_pid} exists but health check failed", file=sys.stderr)
+            tslog(f"worker pid {old_pid} exists but health check failed")
             return 1
 
     python = VENV_BIN / "python"
-    log = logfile.open("a", buffering=1)
+    logfh = logfile.open("a", buffering=1)
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     proc = subprocess.Popen(
         [str(python), "-m", "z_image.worker_server", default_precision()],
         cwd=ROOT,
-        stdout=log,
+        stdout=logfh,
         stderr=subprocess.STDOUT,
         env=env,
     )
@@ -51,7 +52,7 @@ def cmd_start() -> int:
             return 0
         time.sleep(1)
 
-    print("worker failed to become healthy within 180s", file=sys.stderr)
+    tslog("worker failed to become healthy within 180s")
     return 1
 
 
@@ -107,5 +108,5 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_status()
     if cmd == "logs":
         return cmd_logs()
-    print(f"unknown daemon command: {cmd}", file=sys.stderr)
+    tslog(f"unknown daemon command: {cmd}")
     return 1

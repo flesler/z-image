@@ -181,8 +181,6 @@ def prune(
     max_entries: int | None = None,
     max_mb: int | None = None,
 ) -> dict[str, int]:
-    if max_age_hours is None and os.environ.get("Z_IMAGE_PROMPT_EMBED_CACHE_MAX_AGE_DAYS"):
-        max_age_hours = float(os.environ["Z_IMAGE_PROMPT_EMBED_CACHE_MAX_AGE_DAYS"]) * 24
     if max_age_hours is None:
         max_age_hours = float(os.environ.get("Z_IMAGE_PROMPT_EMBED_CACHE_MAX_AGE_HOURS", "24"))
     max_entries = max_entries if max_entries is not None else int(

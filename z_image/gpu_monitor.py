@@ -1,12 +1,12 @@
 """GPU/device monitoring for the warm worker."""
 from __future__ import annotations
 
-import sys
 from typing import Any
 
 import torch
 
 from .config import cpu_offload_enabled
+from .log import log
 
 
 def _module_device(module) -> str | None:
@@ -75,11 +75,7 @@ def format_snapshot(s: dict[str, Any]) -> str:
 
 def log_pipe(pipe, *, label: str, file=None) -> dict[str, Any]:
     snap = snapshot(pipe)
-    print(f"[gpu] {label}: {format_snapshot(snap)}", file=file or sys.stderr, flush=True)
+    log(f"{label}: {format_snapshot(snap)}", tag="gpu", file=file)
     if snap.get("accelerate_hooks", 0) > 0 and not cpu_offload_enabled():
-        print(
-            "[gpu] WARNING: accelerate hooks active while fast-gpu mode is enabled",
-            file=file or sys.stderr,
-            flush=True,
-        )
+        log("WARNING: accelerate hooks active while fast-gpu mode is enabled", tag="gpu", file=file)
     return snap

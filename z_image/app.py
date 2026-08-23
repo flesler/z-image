@@ -14,6 +14,7 @@ from .caption import run_caption, run_captions
 from .daemon import main as daemon_main
 from .from_image import run_from_image
 from .generate import run_generate
+from .log import log
 from .sizes import ASPECT_BASE_CHOICES, resolve_dimensions, size_choices
 
 
@@ -163,7 +164,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _log_cli_total(t0: float) -> None:
     elapsed = time.perf_counter() - t0
-    print(f"total {elapsed:.2f}s", file=sys.stderr, flush=True)
+    log(f"total {elapsed:.2f}s")
 
 
 def main(argv: list[str] | None = None, *, t0: float | None = None) -> int:

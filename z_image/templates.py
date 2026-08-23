@@ -1,6 +1,7 @@
 """Deterministic `{a|b|c}` prompt templates resolved from seed."""
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 
@@ -73,3 +74,17 @@ def resolve_prompt(text: str, seed: int, *, base_seed: int | None = None) -> Res
 
     resolved = _GROUP_RE.sub(repl, text)
     return ResolvedPrompt(template=text, prompt=resolved)
+
+
+def all_variants(text: str, *, max_variants: int | None = None) -> list[str] | None:
+    """All resolved prompts for a template (offset 0..n-1), or None if not a template."""
+    groups = parse_groups(text)
+    if not groups:
+        return None
+    limit = max_variants if max_variants is not None else int(
+        os.environ.get("Z_IMAGE_TEMPLATE_MAX_VARIANTS", "64")
+    )
+    total = combo_count(groups)
+    if total > limit:
+        return None
+    return [resolve_prompt(text, offset, base_seed=0).prompt for offset in range(total)]

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import sys
-
 from .batch import run_batch
 from .config import LORAS_JSON, apply_env
+from .log import log
 from .loras import benchmark_plan, load_catalog
 
 
@@ -24,7 +23,7 @@ def run_benchmark(
         raise SystemExit("no LoRAs with prompts to benchmark")
 
     for lora_file, prompt, seed in plan:
-        print(f"=== {lora_file} (s{seed}) ===", file=sys.stderr)
+        log(f"=== {lora_file} (s{seed}) ===")
         run_batch(
             [prompt],
             loras=[lora_file],

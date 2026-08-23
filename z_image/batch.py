@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 from .config import PREVIEW_STEPS, apply_env, batch_dir, resolve_steps, resolve_strength, validate_strength
 from .init_image import load_init_image
+from .log import log
 from .loras import LoraSpec, apply_triggers, expand_lora_specs, normalize_prompt, random_seed, resolve_spec
 from .naming import batch_filename, batch_stem
 from .templates import resolve_prompt
@@ -113,21 +113,21 @@ def run_batch(
             raise SystemExit("img2img batch does not support --reuse-steps")
         if not dry_run:
             load_init_image(image, width=width, height=height)
-        print(f"img2img: {image} strength={img_strength:g}", file=sys.stderr)
+        log(f"img2img: {image} strength={img_strength:g}")
 
     default_steps = resolve_steps(None)
     if preview:
         steps_list = [PREVIEW_STEPS]
-        print(f"preview: {PREVIEW_STEPS} steps", file=sys.stderr)
+        log(f"preview: {PREVIEW_STEPS} steps")
     else:
         steps_list = normalize_steps_list(steps_list) or [default_steps]
         if len(steps_list) > 1 or steps_list[0] != default_steps:
-            print(f"steps: {', '.join(str(s) for s in steps_list)}", file=sys.stderr)
+            log(f"steps: {', '.join(str(s) for s in steps_list)}")
 
     wildcard = loras and any(s.split(":", 1)[0].strip().lower() in ("*", "all") for s in loras)
     loras = expand_lora_specs(loras) if loras else []
     if wildcard:
-        print(f"loras: expanded '*' → {len(loras)} adapter(s)", file=sys.stderr)
+        log(f"loras: expanded '*' → {len(loras)} adapter(s)")
 
     resolved = [resolve_spec(spec) for spec in loras]
     if not each and not combo:
@@ -143,11 +143,11 @@ def run_batch(
     seed_runs = expand_seed_runs(seeds, repeat, seed_set=seed_set)
     if len(seed_runs) == 1:
         suffix = " (random)" if not seed_set else ""
-        print(f"seed: {seed_runs[0]}{suffix}", file=sys.stderr)
+        log(f"seed: {seed_runs[0]}{suffix}")
     else:
         if not seed_set:
-            print(f"seed: {seed_runs[0]} (random)", file=sys.stderr)
-        print(f"seeds: {', '.join(str(s) for s in seed_runs)}", file=sys.stderr)
+            log(f"seed: {seed_runs[0]} (random)")
+        log(f"seeds: {', '.join(str(s) for s in seed_runs)}")
 
     outputs: list[Path] = []
     outputs.extend(
@@ -177,7 +177,7 @@ def run_batch(
 
 def _log_generated(path: str | Path, elapsed_s: float, *, index: int, partial: bool = False) -> None:
     tag = " partial" if partial else ""
-    print(f"{index:02d}. {path} {elapsed_s:.1f}s{tag}", file=sys.stderr, flush=True)
+    log(f"{index:02d}. {path} {elapsed_s:.1f}s{tag}")
 
 
 def _model_variants(
@@ -230,7 +230,7 @@ def _run_one_batch(
 
     for iter_seed in seed_runs:
         if len(seed_runs) > 1:
-            print(f"seed run: {iter_seed}", file=sys.stderr)
+            log(f"seed run: {iter_seed}")
 
         seed_base = seed_runs[0]
         for model_label, lora_specs, variant in models:
@@ -251,16 +251,16 @@ def _run_one_batch(
 
                     step_label = f" s{step_count}" if len(steps_list) > 1 else ""
                     if not override and output.is_file():
-                        print(f"⊘ skip {model_label}{step_label} → {output}", file=sys.stderr)
+                        log(f"⊘ skip {model_label}{step_label} → {output}")
                         outputs.append(output)
                         continue
 
                     if dry_run:
-                        print(f"→ {model_label}{step_label} → {output}", file=sys.stderr)
+                        log(f"→ {model_label}{step_label} → {output}")
                         if final_prompt != resolved.prompt:
-                            print(f"prompt: {final_prompt}", file=sys.stderr)
+                            log(f"prompt: {final_prompt}")
                         elif resolved.template:
-                            print(f"prompt: {final_prompt}", file=sys.stderr)
+                            log(f"prompt: {final_prompt}")
                     jobs.append(
                         {
                             "prompt": final_prompt,

@@ -5,6 +5,7 @@ import json
 import sys
 
 from .config import apply_env
+from .log import log
 from .prompt_embed_cache import list_entries, prune, remove_entry
 
 
@@ -31,7 +32,7 @@ def run_cache(argv: list[str]) -> int:
                 f"last={entry.get('last_used_at', '?')} "
                 f"{preview!r}"
             )
-        print(f"{len(entries)} entries", file=sys.stderr)
+        log(f"{len(entries)} entries")
         return 0
 
     if cmd == "prune":
@@ -41,17 +42,17 @@ def run_cache(argv: list[str]) -> int:
 
     if cmd == "rm":
         if len(argv) < 2:
-            print("cache rm needs a hash prefix or full hash", file=sys.stderr)
+            log("cache rm needs a hash prefix or full hash")
             return 1
         needle = argv[1]
         matches = [e for e in list_entries() if e.get("hash", "").startswith(needle)]
         if not matches:
-            print(f"no cache entry matching {needle!r}", file=sys.stderr)
+            log(f"no cache entry matching {needle!r}")
             return 1
         for entry in matches:
             remove_entry(entry["hash"])
             print(f"removed {entry['hash']}")
         return 0
 
-    print(f"unknown cache command: {cmd}", file=sys.stderr)
+    log(f"unknown cache command: {cmd}")
     return 1

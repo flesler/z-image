@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import gc
-import sys
 import threading
 import time
 from contextlib import contextmanager
@@ -12,6 +11,7 @@ import torch
 import zimage.engine as zengine
 
 from .config import idle_unload_minutes
+from .log import log
 from .text_encoder import release_text_encoder
 
 
@@ -45,7 +45,7 @@ def unload_pipeline() -> bool:
 
 
 def _log(msg: str) -> None:
-    print(f"[worker] {msg}", file=sys.stderr, flush=True)
+    log(msg, tag="worker")
 
 
 class IdleGuard:

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 from .config import apply_env, output_dir, resolve_strength, validate_strength
 from .init_image import load_init_image
+from .log import log
 from .loras import LoraSpec, apply_triggers, normalize_prompt, random_seed, resolve_spec
 from .naming import output_filename
 from .templates import resolve_prompt
@@ -49,17 +49,17 @@ def run_generate(
             strength=img_strength,
         )
 
-    print(f"seed: {seed}", file=sys.stderr)
+    log(f"seed: {seed}")
     if image is not None:
-        print(f"img2img: {image} strength={img_strength:g}", file=sys.stderr)
-    print(f"→ {output}", file=sys.stderr)
+        log(f"img2img: {image} strength={img_strength:g}")
+    log(f"→ {output}")
 
     resolved_loras: list[LoraSpec] = [resolve_spec(spec) for spec in loras]
     final_prompt = apply_triggers(resolved.prompt, loras) if loras else resolved.prompt
     if loras:
-        print(f"prompt: {final_prompt}", file=sys.stderr)
+        log(f"prompt: {final_prompt}")
     elif resolved.template:
-        print(f"prompt: {final_prompt}", file=sys.stderr)
+        log(f"prompt: {final_prompt}")
 
     ensure_worker()
     generate_via_worker(

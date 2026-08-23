@@ -4,13 +4,13 @@ from __future__ import annotations
 import gc
 import os
 import re
-import sys
 from pathlib import Path
 from typing import Literal
 
 from PIL import Image
 
 from .config import apply_env
+from .log import log
 from .metadata import embed_prompt as write_prompt_metadata
 from .metadata import read_prompt as read_prompt_metadata
 
@@ -81,10 +81,9 @@ def resolve_caption_device(
     if free >= GPU_VRAM_REQUIRED_BYTES:
         return "cuda"
 
-    print(
+    log(
         f"caption: auto → CPU ({free / 1e9:.1f}GB GPU free, "
-        f"need ~{GPU_VRAM_REQUIRED_BYTES / 1e9:.1f}GB)",
-        file=sys.stderr,
+        f"need ~{GPU_VRAM_REQUIRED_BYTES / 1e9:.1f}GB)"
     )
     return "cpu"
 
@@ -148,7 +147,7 @@ def _ensure_model(model_id: str, device: str):
     from transformers import BlipForConditionalGeneration, BlipProcessor
 
     dtype = _model_dtype(device)
-    print(f"loading caption model {model_id} on {device} ({dtype})...", file=sys.stderr)
+    log(f"loading caption model {model_id} on {device} ({dtype})...")
     _processor = BlipProcessor.from_pretrained(model_id)
     _model = BlipForConditionalGeneration.from_pretrained(model_id, torch_dtype=dtype).to(device)
     _model_id = model_id
@@ -212,7 +211,7 @@ def run_caption(
     if not force_caption:
         cached = read_prompt_metadata(resolved)
         if cached:
-            print("caption: from metadata", file=sys.stderr)
+            log("caption: from metadata")
             if embed_prompt:
                 write_prompt_metadata(resolved, cached)
             return cached

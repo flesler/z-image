@@ -11,6 +11,7 @@ from diffusers.pipelines.z_image.pipeline_z_image import ZImagePipeline
 from diffusers.pipelines.z_image.pipeline_z_image_img2img import ZImageImg2ImgPipeline
 
 from .config import cpu_offload_enabled, gpu_monitor_enabled, resolve_steps, verbose_enabled
+from .log import log as tslog
 from .text_encoder import ensure_text_encoder, release_text_encoder
 
 _installed = False
@@ -45,10 +46,10 @@ def _patch_pipeline_class(
                     if p.text_encoder is not None:
                         te = str(next(p.text_encoder.parameters()).device)
                     elapsed = time.perf_counter() - t0
-                    print(
-                        f"[gpu] step {step_index + 1}/{steps} "
+                    log(
+                        f"step {step_index + 1}/{steps} "
                         f"tfm={tfm} te={te} elapsed={elapsed:.1f}s",
-                        flush=True,
+                        tag="gpu",
                     )
                 return callback_kwargs
 
@@ -86,11 +87,11 @@ def install(*, log: Callable[[str], None] | None = None) -> None:
         if log:
             log(msg)
         else:
-            print(msg, flush=True)
+            tslog(msg, tag="gpu")
 
     if cpu_offload_enabled():
         if verbose_enabled():
-            emit("[gpu] accelerate CPU offload (Z_IMAGE_CPU_OFFLOAD=1)")
+            emit("accelerate CPU offload (Z_IMAGE_CPU_OFFLOAD=1)")
         _installed = True
         return
 
@@ -127,5 +128,5 @@ def install(*, log: Callable[[str], None] | None = None) -> None:
     _patch_pipeline()
     if verbose_enabled():
         tiling = ", VAE tiling on" if vae_tiling_enabled() else ""
-        emit(f"[gpu] fast path — no attention slicing, no progress bar, TE released after encode{tiling}")
+        emit(f"fast path — no attention slicing, no progress bar, TE released after encode{tiling}")
     _installed = True

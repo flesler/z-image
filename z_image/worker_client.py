@@ -7,6 +7,7 @@ import urllib.request
 from pathlib import Path
 
 from .config import VENV_BIN, ROOT, apply_env, worker_connect_host, worker_port
+from .log import log
 from .loras import LoraSpec, resolve_path
 from .metadata import GenMeta, save_image
 
@@ -38,7 +39,7 @@ def is_healthy() -> bool:
 def ensure_worker() -> None:
     if is_healthy():
         return
-    print("starting warm worker...", flush=True)
+    log("starting warm worker...")
     python = VENV_BIN / "python"
     cli = ROOT / "cli.py"
     subprocess.run(

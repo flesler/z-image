@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import gc
-import sys
 import time
 from typing import Iterable
 
@@ -12,10 +11,11 @@ from zimage.hardware import MODEL_ID_MAP
 
 from .config import cpu_offload_enabled
 from . import prompt_embed_cache as embed_cache
+from .log import log
 
 
 def _log(msg: str) -> None:
-    print(f"[gpu] {msg}", file=sys.stderr, flush=True)
+    log(msg, tag="gpu")
 
 
 def pipe_device(pipe: ZImagePipeline) -> torch.device:
@@ -98,6 +98,8 @@ def encode_prompts(
     if to_encode:
         embed_cache.maybe_prune()
         ensure_text_encoder(pipe)
+        if len(to_encode) > 1:
+            _log(f"encoding {len(to_encode)} prompt(s) in one text-encoder load")
         for prompt in to_encode:
             t_one = time.perf_counter()
             embeds, _ = pipe.encode_prompt(prompt, do_classifier_free_guidance=False)

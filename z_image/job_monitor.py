@@ -9,6 +9,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from .log import log
+
 
 def _worker_pid() -> int:
     return os.getpid()
@@ -139,9 +141,9 @@ def log_summary(summary: dict[str, Any], *, label: str) -> None:
     fan_s = f" fan_max={fan}rpm" if fan else " fan=n/a"
     temp = summary.get("gpu_temp_c_max")
     temp_s = f" gpu_temp_max={temp}C" if temp is not None else ""
-    print(
-        f"[monitor] {label}: proc_cpu_max={summary['proc_cpu_max_pct']}% "
+    log(
+        f"{label}: proc_cpu_max={summary['proc_cpu_max_pct']}% "
         f"hot_thread={summary['hot_thread_max_pct']}%@core{summary['hot_thread_core']}"
         f"{fan_s}{temp_s} samples={summary['samples']}",
-        flush=True,
+        tag="monitor",
     )

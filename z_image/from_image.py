@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 from .batch import dedupe_ints, run_batch
 from .caption import image_dimensions, run_caption
 from .config import apply_env
 from .generate import run_generate
+from .log import log
 from .loras import random_seed
 
 
@@ -38,8 +38,8 @@ def run_from_image(
         force_caption=force_caption,
         embed_prompt=embed_prompt,
     )
-    print(f"caption: {prompt}", file=sys.stderr)
-    print(f"size: {gen_w}x{gen_h} (source {img_w}x{img_h})", file=sys.stderr)
+    log(f"caption: {prompt}")
+    log(f"size: {gen_w}x{gen_h} (source {img_w}x{img_h})")
 
     if caption_only:
         print(prompt)
