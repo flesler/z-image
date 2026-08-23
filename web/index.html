@@ -1182,24 +1182,19 @@
       };
     }
 
-    function inferGenModeFromFilename(name) {
-      if (!name) {
+    function inferGenMode(meta) {
+      const steps = meta?.steps;
+      if (steps == null) {
         return null;
       }
-      if (/-s3\b/i.test(name)) {
-        return 'preview';
-      }
-      if (/-\d+x\d+-/i.test(name)) {
-        return 'refined';
-      }
-      return null;
+      return steps === PREVIEW_STEPS ? 'preview' : 'refined';
     }
 
-    function applyViewerState(meta, filename) {
+    function applyViewerState(meta) {
       captureViewerContext(meta);
       if (meta?.seed != null) {
         lastSeed = meta.seed;
-        lastGenMode = inferGenModeFromFilename(filename);
+        lastGenMode = inferGenMode(meta);
       } else {
         lastSeed = null;
         lastGenMode = null;
@@ -1241,6 +1236,7 @@
         ...(fromPng || {}),
         prompt: fromPng?.prompt ?? fallback?.prompt ?? null,
         seed: fromPng?.seed ?? fallback?.seed ?? null,
+        steps: fromPng?.steps ?? null,
       };
       if (fromPng?.loraKnown) {
         meta.lora = resolveLoraName(fromPng.lora);
@@ -1300,7 +1296,7 @@
 
       if (token !== viewerToken) return;
       img.src = cached.objectUrl;
-      applyViewerState(cached.meta, item.name);
+      applyViewerState(cached.meta);
       syncFormFromMeta(cached.meta);
       updateViewerPrompt(cached.meta);
     }
@@ -1785,7 +1781,7 @@
         if (item) {
           const cached = imageCache.get(item.path);
           if (cached) {
-            applyViewerState(cached.meta, item.name);
+            applyViewerState(cached.meta);
             syncFormFromMeta(cached.meta);
           }
         }
@@ -1837,7 +1833,7 @@
           setStatus('Loaded from image metadata');
         }
 
-        applyViewerState(meta, file.name);
+        applyViewerState(meta);
         syncFormFromMeta(meta);
       } catch (err) {
         setStatus(err.message, true);
