@@ -26,9 +26,13 @@ class GenMeta:
     strength: float | None = None
 
 
-def _lora_label(path_or_name: str, strength: float) -> str:
-    name = Path(path_or_name).name.removesuffix(".safetensors")
-    return f"{name}:{strength:g}"
+def _lora_names(loras: list[tuple[str, float]]) -> str:
+    names: list[str] = []
+    for path_or_name, _ in loras:
+        name = Path(path_or_name).name.removesuffix(".safetensors")
+        if name and name not in names:
+            names.append(name)
+    return ", ".join(names)
 
 
 def build_parameters(meta: GenMeta) -> str:
@@ -47,7 +51,7 @@ def build_parameters(meta: GenMeta) -> str:
     if meta.precision:
         parts.append(f"Precision: {meta.precision}")
     if meta.loras:
-        parts.append("Lora: " + ", ".join(_lora_label(name, s) for name, s in meta.loras))
+        parts.append(f"LoRA: {_lora_names(meta.loras)}")
     if meta.strength is not None:
         parts.append(f"Denoising strength: {meta.strength:g}")
     lines.append(", ".join(parts))

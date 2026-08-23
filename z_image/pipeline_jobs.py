@@ -620,9 +620,9 @@ def generate_one(
         variants = all_variants(template) if template else None
         if variants:
             encode_list = variants
-            if loras:
-                specs = [str(path) for path, _ in loras]
-                encode_list = [apply_triggers(variant, specs) for variant in encode_list]
+        if loras:
+            specs = [Path(path).name for path, _ in loras]
+            encode_list = [apply_triggers(variant, specs) for variant in encode_list]
         prompt_embeds = encode_prompts(pipe, encode_list)[prompt]
         prompt = None
     try:

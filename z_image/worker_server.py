@@ -39,7 +39,7 @@ from .exceptions import ClientDisconnected
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
 from .init_image import load_init_image
 from .job_monitor import JobMonitor, log_summary
-from .loras import apply_triggers, list_catalog_entries, normalize_prompt, resolve_path
+from .loras import list_catalog_entries, normalize_prompt, resolve_path
 from .pipeline_cache import IdleGuard, current_pipe
 from .metadata import GenMeta, save_image
 from .pipeline_jobs import generate_one, recover_pipe, run_batch_on_pipe
@@ -160,18 +160,16 @@ def run_generate_job(body: dict) -> dict:
     body["seed"] = seed
     seed_base = int(body["seed_base"]) if "seed_base" in body else None
     resolved = resolve_prompt(raw_prompt, seed, base_seed=seed_base)
-    prompt = resolved.prompt
+    save_prompt = resolved.prompt
     template = resolved.template
     lora_entries = body.get("loras", [])
-    if lora_entries:
-        prompt = apply_triggers(prompt, [entry["file"] for entry in lora_entries])
     steps = resolve_steps(body.get("steps"))
     strength = body.get("strength")
     img_strength = float(strength) if strength is not None else None
 
     if "output" not in body:
         filename = output_filename(
-            prompt,
+            save_prompt,
             width,
             height,
             seed,
@@ -182,7 +180,12 @@ def run_generate_job(body: dict) -> dict:
 
     output = Path(body["output"])
     precision = resolve_precision(body.get("precision"))
-    loras = resolve_loras(body.get("loras", []))
+    loras = resolve_loras(lora_entries)
+    meta_loras = (
+        [(entry["file"], float(entry.get("strength", 1.0))) for entry in lora_entries]
+        if lora_entries
+        else None
+    )
 
     if output.is_file():
         rel = output.resolve().relative_to(gallery_root())
@@ -214,7 +217,7 @@ def run_generate_job(body: dict) -> dict:
         monitor_ctx.__enter__()
     try:
         image = generate_one(
-            prompt=prompt,
+            prompt=save_prompt,
             template=template,
             steps=steps,
             width=width,
@@ -236,14 +239,14 @@ def run_generate_job(body: dict) -> dict:
         image,
         output,
         GenMeta(
-            prompt=prompt,
+            prompt=save_prompt,
             width=width,
             height=height,
             seed=seed,
             steps=steps,
             template=template,
             precision=precision,
-            loras=loras or None,
+            loras=meta_loras,
             strength=strength,
         ),
     )
