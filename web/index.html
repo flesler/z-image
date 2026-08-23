@@ -509,6 +509,7 @@
     let genAbort = false;
     let lastSeed = null;
     let lastGenMode = null;
+    let viewerContext = null;
     let activeGenMode = null;
     let viewerToken = 0;
     const imageCache = new Map();
@@ -568,12 +569,36 @@
       return generating && genProgress && genProgress.current < genProgress.total;
     }
 
+    function captureViewerContext(meta) {
+      if (!meta || meta.seed == null) {
+        viewerContext = null;
+        return;
+      }
+      viewerContext = {
+        prompt: (meta.template || meta.prompt || '').trim(),
+        width: meta.width != null ? snapDim(meta.width) : null,
+        height: meta.height != null ? snapDim(meta.height) : null,
+      };
+    }
+
+    function formMatchesViewer() {
+      if (!viewerContext) {
+        return false;
+      }
+      return $('prompt').value.trim() === viewerContext.prompt
+        && snapDim($('width').value) === viewerContext.width
+        && snapDim($('height').value) === viewerContext.height;
+    }
+
     function canRefine() {
-      return lastSeed != null && lastGenMode !== 'refined';
+      return lastSeed != null && lastGenMode !== 'refined' && formMatchesViewer();
     }
 
     function canGenerate() {
-      return lastGenMode === 'refined';
+      if (lastGenMode === 'refined') {
+        return true;
+      }
+      return lastSeed != null && lastGenMode !== 'refined' && !formMatchesViewer();
     }
 
     function secondaryMode() {
@@ -878,6 +903,7 @@
     }
 
     function applyGenMeta(meta) {
+      captureViewerContext(meta);
       if (!meta || generating) return;
       if (meta.template || meta.prompt) {
         $('prompt').value = meta.template || meta.prompt;
@@ -974,6 +1000,7 @@
 
       if (!images.length) {
         viewerToken += 1;
+        viewerContext = null;
         img.classList.add('hidden');
         img.removeAttribute('src');
         clearImageCache();
@@ -1036,8 +1063,8 @@
       if (generating) {
         return;
       }
-      if (canRefine()) {
-        await runGeneration('refined');
+      if (canSecondary()) {
+        await runGeneration(secondaryMode());
       } else {
         await runGeneration('preview');
       }
@@ -1293,6 +1320,11 @@
       }
     }
 
+    function onFormContextChange() {
+      snapSizeFields();
+      updateControls();
+    }
+
     $('gen-form').addEventListener('submit', onSubmit);
     $('preview-btn').addEventListener('click', () => runGeneration('preview'));
     $('refine-btn').addEventListener('click', () => runSecondary());
@@ -1300,8 +1332,11 @@
     $('prev-btn').addEventListener('click', () => step(-1));
     $('next-btn').addEventListener('click', () => step(1));
     $('scroll-jump-btn').addEventListener('click', onScrollJumpClick);
-    $('width').addEventListener('change', () => { snapSizeFields(); updatePortraitLayout(); });
-    $('height').addEventListener('change', () => { snapSizeFields(); updatePortraitLayout(); });
+    $('prompt').addEventListener('input', onFormContextChange);
+    $('width').addEventListener('input', onFormContextChange);
+    $('height').addEventListener('input', onFormContextChange);
+    $('width').addEventListener('change', () => { onFormContextChange(); updatePortraitLayout(); });
+    $('height').addEventListener('change', () => { onFormContextChange(); updatePortraitLayout(); });
     window.addEventListener('resize', updatePortraitLayout);
     window.addEventListener('scroll', () => {
       syncPortraitPanel();
