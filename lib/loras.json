@@ -8,7 +8,9 @@
       "cozy witch cottage interior, warm candlelight, stacked books, sleeping cats, wooden beams",
       "vast cloudy sky over rolling green hills, tiny figure with a red umbrella on a winding path",
       "underwater spirit garden, bioluminescent jellyfish, peaceful mood, shafts of light from above"
-    ]
+    ],
+    "width": 1024,
+    "height": 1024
   },
   "RealisticSnapshot-Zimage-Turbov5.safetensors": {
     "trigger": "",
@@ -18,7 +20,9 @@
       "friends at a house party, harsh on-camera flash, motion blur, messy kitchen, candid smartphone photo",
       "selfie in a bathroom mirror, smartphone capture, slightly overexposed flash, casual everyday moment",
       "golden retriever in a sunny park, low angle pet photo, slightly blurry, joyful amateur snapshot"
-    ]
+    ],
+    "width": 1024,
+    "height": 1024
   },
   "Purple_grainy_zit.safetensors": {
     "url": "https://civitai.com/models/2329053/purple-grainy-oror-photography-lora?modelVersionId=2619939",
@@ -29,7 +33,9 @@
       "neon-lit alley at night, lonely figure walking away, cinematic grain, moody purple haze",
       "young couple on a rooftop at twilight, city skyline, purple atmospheric haze, intimate candid photo",
       "still life of wilted flowers in a glass vase, moody interior light, heavy film grain, purple shadows"
-    ]
+    ],
+    "width": 896,
+    "height": 1248
   },
   "ZiTMythG0thicL1nes.safetensors": {
     "url": "https://civitai.com/models/599757/velvets-mythic-fantasy-styles-or-flux-pony-illustrious-zit-anima-krea2?modelVersionId=2924569",
@@ -40,7 +46,9 @@
       "ancient dragon coiled around a ruined cathedral, gothic linework, dramatic clouds",
       "elven archer in a misty birch forest, intricate costume details, tall trees, ethereal light",
       "celestial goddess floating above clouds, flowing robes, epic scale, intricate line art"
-    ]
+    ],
+    "width": 2176,
+    "height": 2880
   },
   "ZiTMythR3alisticF.safetensors": {
     "url": "https://civitai.com/models/599757/velvets-mythic-fantasy-styles-or-flux-pony-illustrious-zit-anima-krea2?modelVersionId=2547883",
@@ -51,7 +59,9 @@
       "battle-scarred knight resting by a campfire, painterly realism, worn armor, quiet night",
       "sorceress conjuring lightning in a stormy tower chamber, dramatic painterly fantasy",
       "mermaid kingdom palace under waves, bioluminescent coral, painterly underwater fantasy scene"
-    ]
+    ],
+    "width": 1088,
+    "height": 1440
   },
   "MidJourneyNSFWZ.safetensors": {
     "url": "https://civitai.com/models/837884/midjourney-artful-nsfw?modelVersionId=2599899",
@@ -59,7 +69,9 @@
     "default_strength": 0.8,
     "prompts": [
       "The image is a digital painting of a woman in a dark and eerie setting. She is wearing a black dress with a hood that covers her head and shoulders. The dress is long and flowing covering her body and her legs. The woman is standing in a body of water with her arms resting on her knees and her head tilted back as if she is deep in thought. The background is a dark moody color with a hint of smoke or fog. The overall mood of the image is mysterious and eerie."
-    ]
+    ],
+    "width": 1024,
+    "height": 1024
   },
   "painting_zimage_v1.safetensors": {
     "url": "https://civitai.com/models/2352385/we-paint?modelVersionId=2645785",
@@ -69,7 +81,9 @@
       "Towering, rugged mountains rise dramatically beneath a stormy sky. A menacing fortress in the distance clings precariously to the mountainside, depicted in a multi-layered blend of photorealistic portraiture and watercolor painting. Meticulous details, frenetic lines, and vivid color contrasts of metallic blue, orange, and deep red create a three-dimensional quality with dynamic energy. Subtle structural elements such as visible cracks add depth and complexity. The artistic style evokes a sense of ominous grandeur and subtle surrealism.",
       "A single human figure in dynamic central pose, depicted as a dancer with athletic stance, viewed from a low angle against a stark backdrop. Style: meticulously hand-drawn linework in digital manga format fused with traditional Japanese ink/watercolor techniques, featuring layered cross-hatching and restrained vintage composition. Color palette: desaturated soft blue, warm beige, and muted earth tones with no saturation. Lighting: low-key cinematic gradient with stark contrast between illuminated areas on the figure and deep shadows, creating high-contrast highlights on the subject. Textural details: visible fabric weave on clothing, grainy texture on skin suggesting weathered material, subtle grunge elements on surfaces. Background: textured background with layered organic surfaces showing aged wall-like structures and fabric remnants, integrated through textural overlays. Composition: tight framing on the central figure with implied depth via foreground fabric details and atmospheric perspective. Material rendering: precise vector-based outlines with rasterized texture layers, showing organic material properties on all surfaces. Manufacturing method: digital illustration created using vector and raster software to emulate hand-drawn precision. Atmosphere: somber mood achieved through desaturated color grading and textured environmental storytelling.",
       "A solitary wanderer stands in the foreground, wearing a floor-length gown with smooth gradient transitions in saturated orange fabric simulating light refraction on the garments surface. The gowns silhouette is defined by clean, precise black outlines against a solid black backdrop, with strategic negative space emphasizing the gowns structure. In the midground, a sharp, angular rocky ridge extends horizontally across the horizon. Behind the ridge, a minimalist cityscape of geometric skyscrapers is silhouetted against the black backdrop, rendered with clean, precise black lines. The composition employs infinite-depth framing, with the wanderer positioned in the lower third, the rocky ridge spanning the middle third, and the cityscape occupying the upper third. Lighting is high-contrast, with the orange gown illuminated against the black backdrop. Color palette: saturated orange on solid black. Material textures: smooth fabric gradients on the gown, sharp edges on the rocky ridge and cityscape structures. Spatial layering: distinct separation between foreground (wanderer), midground (ridge), and background (cityscape), with no overlapping elements. All elements are rendered in digital vector art with integrated raster gradient techniques for textural depth."
-    ]
+    ],
+    "width": 832,
+    "height": 1216
   },
   "ZIT_3xperiment0.safetensors": {
     "url": "https://civitai.com/models/2259580/ta863xperiment0?modelVersionId=2546573",
@@ -77,11 +91,13 @@
     "default_strength": 0.4,
     "prompts": [
       "A poetic oil painting of a young woman in profile, standing calmly against a warm glowing background of deep amber, burnt orange and soft golden ochre. Her expression is serene and introspective, eyes lowered slightly as she gently raises a gloved hand, a monarch butterfly resting delicately on her fingertip.\nAdditional butterflies, painted in rich orange and black tones, are woven into her dark brown hair, their wings echoing the color of the surrounding light. Her dress is elegant and dark, rendered in layered oil paint with visible brushstrokes, subtle floral patterns emerging organically from the fabric.\nThe lighting is warm and painterly, resembling classical studio illumination, softly highlighting her face and hand while allowing the background to dissolve into textured color fields. Shadows are smooth and blended, emphasizing form without sharp contrast.\nThe oil paint texture is clearly visible throughout the image, thick brushstrokes and gentle impasto defining the background, while finer controlled strokes shape the face, butterflies and hands. The overall aesthetic blends romantic symbolism, fine art oil painting tradition and a timeless, slightly surreal atmosphere.",
-      "A painterly cinematic harbor scene at dusk, a large wooden sailing ship slowly gliding through calm reflective water. Tall masts and loose rigging rise against a dramatic sky filled with layered clouds and a glowing low sun in warm orange tones. The ship’s dark silhouette contrasts softly against the luminous sky, subtle lantern lights glowing along the deck.\nOld wooden houses stand on stilts along the water’s edge, their reflections stretching and breaking across the surface in expressive brushstrokes. A small empty rowboat rests in the foreground, angled toward the viewer, adding depth and quiet narrative tension.\nThe color palette blends warm amber and sunset orange with muted teal, olive green and soft gray, creating a nostalgic and atmospheric mood. Brush textures are visible and intentional, painterly strokes defining water, clouds and architecture without sharp realism.\nLighting is cinematic and directional, the sun diffused behind clouds, casting soft highlights across rippling water and subtle rim light along the ship’s hull. The overall style merges concept art, oil painting aesthetics and modern illustrative storytelling, calm, moody and evocative.",
+      "A painterly cinematic harbor scene at dusk, a large wooden sailing ship slowly gliding through calm reflective water. Tall masts and loose rigging rise against a dramatic sky filled with layered clouds and a glowing low sun in warm orange tones. The ship\u2019s dark silhouette contrasts softly against the luminous sky, subtle lantern lights glowing along the deck.\nOld wooden houses stand on stilts along the water\u2019s edge, their reflections stretching and breaking across the surface in expressive brushstrokes. A small empty rowboat rests in the foreground, angled toward the viewer, adding depth and quiet narrative tension.\nThe color palette blends warm amber and sunset orange with muted teal, olive green and soft gray, creating a nostalgic and atmospheric mood. Brush textures are visible and intentional, painterly strokes defining water, clouds and architecture without sharp realism.\nLighting is cinematic and directional, the sun diffused behind clouds, casting soft highlights across rippling water and subtle rim light along the ship\u2019s hull. The overall style merges concept art, oil painting aesthetics and modern illustrative storytelling, calm, moody and evocative.",
       "A contemporary abstract magazine cover featuring a serene woman in close up portrait, eyes closed, head slightly tilted upward, expressing calm confidence and introspection. Her short dark hair is softly tousled, skin rendered in warm golden tones with smooth painterly gradients and subtle texture.\nThe background is composed of bold geometric blocks and layered rectangles in warm ochre, burnt orange, muted red, cream and soft blue, arranged in an editorial collage layout. Shapes overlap and frame the portrait asymmetrically, creating a dynamic yet balanced composition inspired by modern art magazines.\nThe illustration style blends painterly realism and graphic abstraction, visible brush textures on skin and clothing, simplified color fields and clean compositional lines. The denim jacket is stylized, textured and loosely painted, grounding the image in contemporary fashion culture.\nLighting is soft and diffused, highlighting facial planes and collarbones, creating a sculptural feel without harsh contrast. The overall aesthetic is minimalist, modern and editorial, suitable for a high end art and fashion magazine cover, refined, expressive and visually bold.",
       "A romantic couple stands hand in hand in a luminous mountain meadow, seen from behind as small, quiet figures surrounded by tall wildflowers and golden atmospheric haze. The woman has long hair and wears a simple light dress or coat, while the man stands beside her in darker clothing, both facing the glowing valley ahead with a calm, intimate posture. In the extreme foreground, a blue butterfly rests among stems and white daisies, its wings open with deep cobalt, turquoise, black, white, and small amber markings. The butterfly partially veils the meadow scene in a natural way, adding depth and a poetic sense of closeness while leaving the couple and landscape clearly readable.  The composition is vertical and cinematic with a strong dutch tilt, placing the butterfly large in the lower foreground and the couple smaller in the upper midground along the diagonal rise of the flower field. The camera sits low among the flowers, creating layered depth from the detailed butterfly and nearby blossoms to the misty mountain valley beyond. The meadow slopes upward through dense red, orange, yellow, coral, and pink wildflowers, guiding the eye toward the couple and the soft glowing sky. Blue mountain walls frame both sides of the image, with a darker rocky peak on the right and pale atmospheric distance opening behind the figures.  The lighting is soft, radiant, and painterly, with warm sunrise or sunset glow spreading through the center of the valley and illuminating the flowers from behind. Cool blue shadows settle into the foreground foliage and mountain forms, while golden cream highlights catch the petals, butterfly wings, and distant mist. The butterfly carries slightly sharper detail and richer contrast than the background, with luminous wing veins and delicate edge highlights. The air feels filled with watercolor bloom, tiny paint speckles, and soft atmospheric diffusion.  The art style is a dreamy watercolor and gouache landscape illustration with visible layered washes, loose expressive brushstrokes, delicate ink-like floral stems, and controlled paint splatter texture. The mountains and sky are rendered with soft watercolor gradients and granulated blue washes, while the meadow uses brighter gouache-like floral marks and textured pigment blooms. The butterfly is painted with more refined illustrative detail, combining crisp wing patterning with painterly edges. The color palette blends cobalt blue, teal, misty cyan, warm cream, golden yellow, poppy red, orange, coral, soft pink, and muted green, creating a romantic, serene, magical atmosphere with strong foreground depth and elegant visual flow",
       "Bradhamel art style, Dabruyanno art style. A surreal digital composition depicts a massive, ornate golden mirror frame floating vertically in an ethereal sky above a parched, cracked earth landscape. The frame, intricately carved with classical flourishes and a warm metallic sheen, serves as a dimensional threshold, reflecting a cosmic vista of a lush, verdant planet against deep teal nebulae and scattered stars. In the foreground, a solitary woman figure in a dark dress stands at the base of a rustic wooden staircase, its simple planks showing visible grain as it ascends from the dusty ground toward the mirror's opening. The composition establishes a clear visual hierarchy, drawing the eye along the path of the stairs from the figure into the celestial reflection, while multiple birds soar in the distant background against billowing white clouds and a gradient sky that transitions from a deep blue zenith to a hazy, sunlit horizon. The lighting is diffuse and purposefully directional, emanating from behind the mirror to create a dreamlike, backlit glow that casts soft shadows on the uneven terrain. Rendered in a painterly digital style with soft edges, the scene utilizes a sophisticated color grade that juxtaposes the cool, celestial tones of the cosmos with the warm, saturated hues of the golden frame and the earthy browns of the cracked ground."
-    ]
+    ],
+    "width": 832,
+    "height": 1216
   },
   "CandidInstaxphotoZ.safetensors": {
     "url": "https://civitai.com/models/1683324?modelVersionId=2597365",
@@ -92,7 +108,9 @@
       "The image is a polaroid photograph of two young women posing for a photo together. They are standing close with playful candid smiles, soft flash lighting, and the characteristic Instax Mini white border framing the scene.",
       "The image is a close-up of a small dog wearing a yellow hoodie. The dog appears to be a Chihuahua with expressive eyes, captured in a spontaneous instant-film snapshot with soft focus and gentle color shifts.",
       "The image shows four young women jumping in the air with their arms raised in celebration. They are caught mid-motion in a flash-heavy candid snapshot with nostalgic Instax Mini coloring and spontaneous energy."
-    ]
+    ],
+    "width": 896,
+    "height": 1344
   },
   "Retro80sVaporwaveZ.safetensors": {
     "url": "https://civitai.com/models/1989095/retro-80s-vaporwave?modelVersionId=2473042",
@@ -103,18 +121,22 @@
       "A bold, vibrant 1980s-style graphic featuring neon gradients, chrome accents, and retro typography against a synthwave sunset skyline.",
       "Night photo of a young woman leaning against a glowing gas pump at 2 AM, pink and cyan neon reflections on wet pavement, vaporwave mood.",
       "A cat wearing sunglasses and a jacket with a colorful retro background, bold 80s palette, glowing highlights, and playful vaporwave composition."
-    ]
+    ],
+    "width": 1024,
+    "height": 1024
   },
   "TinyThings2ZIT.safetensors": {
     "url": "https://civitai.com/models/2313869/tiny-things?modelVersionId=2611795",
     "trigger": "TinyDaal",
     "default_strength": 1.0,
     "prompts": [
-      "A minuscule green-skinned elf-eared alien sits cross-legged in serene meditation, its head replaced by a translucent blue glass brain model with visible glaze cracks and luminous white tendrils stitching its torso; intricate silver filaments of jewelry, including a central pendant and arm bands with hand-stitched seams, dangle from its fragile form. Four miniature swords with tarnished silver hilts and thin blades hover dynamically, their edges catching dust motes, alongside jagged shards of blue crystal with porous interiors and faint rust stains resting on a base of fractured crystalline structures. The vast cosmic background features distant, softly swirling nebulae of matte blue dust fields and silent, indifferent black voids, all rendered in high detail with visible fiber strands and micro-cracks across every surface. Dominant colors of electric blue glaze, vibrant moss green skin, and deep black void evoke a poetic stillness, where every element—cracks in the brain casing, oxidized silver, and the alien's porous skin textures—holds equal weight to the delicate pose.",
+      "A minuscule green-skinned elf-eared alien sits cross-legged in serene meditation, its head replaced by a translucent blue glass brain model with visible glaze cracks and luminous white tendrils stitching its torso; intricate silver filaments of jewelry, including a central pendant and arm bands with hand-stitched seams, dangle from its fragile form. Four miniature swords with tarnished silver hilts and thin blades hover dynamically, their edges catching dust motes, alongside jagged shards of blue crystal with porous interiors and faint rust stains resting on a base of fractured crystalline structures. The vast cosmic background features distant, softly swirling nebulae of matte blue dust fields and silent, indifferent black voids, all rendered in high detail with visible fiber strands and micro-cracks across every surface. Dominant colors of electric blue glaze, vibrant moss green skin, and deep black void evoke a poetic stillness, where every element\u2014cracks in the brain casing, oxidized silver, and the alien's porous skin textures\u2014holds equal weight to the delicate pose.",
       "Tiny robot miniature perched on a colossal concrete ledge, extreme macro eye-level view, exaggeratedly small cube form with peeling paint and dust, vast empty cityscape fading into soft bokeh.",
       "Tiny handcrafted figure standing upright against a textured vertical surface, spherical black head with minuscule yellow eyes, stitched fabric body, wire limbs, shallow depth of field, muted desaturated palette.",
       "Tiny demon child carved from dark resin and wire crouched at the edge of a massive ink spill that reads as a black ocean, smooth round horns, fragile miniature scale against an indifferent vast background."
-    ]
+    ],
+    "width": 768,
+    "height": 1280
   },
   "StorybookFolkArtZ.safetensors": {
     "url": "https://civitai.com/models/1321740/storybook-folk-art?modelVersionId=2507592",
@@ -126,6 +148,8 @@
       "Luke Skywalker, sweat-slicked brow glistening, grips a chipped machete and hacks a swath through emerald vines, his fierce blue eyes darting for jungle threats, storybook folk-art textures and dreamlike flowing details throughout the scene.",
       "A young man with wild eyes burning like coals sprints through a shifting virtual world, his face locked in fierce determination, wearing a sleek haptic suit that pulses with light, whimsical illustrated folk-art atmosphere.",
       "Jack tumbles headfirst down a verdant, undulating hillside, his arms windmilling and face flushed with incredulous laughter, while Jill, skirt flying and eyes wide with playful horror, reaches out to snag the brim of his crown as it pirouettes above the wildflowers; beyond them a crooked little wellhead sprouts gaily painted pails, and the distant village roofs spiral like painted music across the morning haze."
-    ]
+    ],
+    "width": 896,
+    "height": 1152
   }
 }

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import LORAS_JSON, loras_dir
+from .sizes import snap_dim
 
 
 @dataclass(frozen=True)
@@ -60,15 +61,19 @@ def list_catalog_entries(catalog: dict | None = None) -> list[dict]:
             available = True
         except FileNotFoundError:
             pass
-        rows.append(
-            {
-                "file": norm,
-                "name": norm.removesuffix(".safetensors"),
-                "default_strength": float(entry.get("default_strength", 1.0)),
-                "trigger": (entry.get("trigger") or "").strip(),
-                "available": available,
-            }
-        )
+        row = {
+            "file": norm,
+            "name": norm.removesuffix(".safetensors"),
+            "default_strength": float(entry.get("default_strength", 1.0)),
+            "trigger": (entry.get("trigger") or "").strip(),
+            "available": available,
+        }
+        width = entry.get("width")
+        height = entry.get("height")
+        if width and height:
+            row["width"] = snap_dim(int(width))
+            row["height"] = snap_dim(int(height))
+        rows.append(row)
     return rows
 
 

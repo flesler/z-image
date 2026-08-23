@@ -666,6 +666,14 @@
         if (data.height != null) $('height').value = data.height;
         if (data.count != null) $('count').value = data.count;
         if (typeof data.seed === 'string') $('seed').value = data.seed;
+        if (typeof data.lora === 'string') {
+          const match = [...$('lora').options].find(
+            (opt) => opt.value === data.lora && !opt.disabled,
+          );
+          if (match) {
+            $('lora').value = data.lora;
+          }
+        }
       } catch {
         // ignore corrupt storage
       }
@@ -1289,14 +1297,6 @@
       if (!res.ok) throw new Error(data.error || 'Failed to load LoRAs');
       loraCatalog = data.loras || [];
       const select = $('lora');
-      const saved = (() => {
-        try {
-          const raw = localStorage.getItem(FORM_STORAGE_KEY);
-          return raw ? JSON.parse(raw).lora : '';
-        } catch {
-          return '';
-        }
-      })();
       select.innerHTML = '<option value="">None</option>';
       for (const entry of loraCatalog) {
         const opt = document.createElement('option');
@@ -1312,12 +1312,21 @@
         opt.textContent = label;
         select.appendChild(opt);
       }
-      if (typeof saved === 'string') {
-        const match = [...select.options].find((opt) => opt.value === saved && !opt.disabled);
-        if (match) {
-          select.value = saved;
-        }
+    }
+
+    function applyLoraSize() {
+      const file = $('lora').value;
+      if (!file) {
+        return;
       }
+      const entry = loraCatalog.find((item) => item.file === file);
+      if (!entry?.width || !entry?.height) {
+        return;
+      }
+      $('width').value = entry.width;
+      $('height').value = entry.height;
+      onFormContextChange();
+      updatePortraitLayout();
     }
 
     function selectedLoraPayload() {
@@ -1693,7 +1702,11 @@
     $('next-btn').addEventListener('click', () => step(1));
     $('scroll-jump-btn').addEventListener('click', onScrollJumpClick);
     $('prompt').addEventListener('input', onFormContextChange);
-    $('lora').addEventListener('change', () => { saveFormState(); onFormContextChange(); });
+    $('lora').addEventListener('change', () => {
+      applyLoraSize();
+      saveFormState();
+      onFormContextChange();
+    });
     $('width').addEventListener('input', onFormContextChange);
     $('height').addEventListener('input', onFormContextChange);
     $('width').addEventListener('blur', () => onSizeBlur($('width')));
@@ -1764,13 +1777,15 @@
       }
     });
 
-    loadFormState();
     initTooltips();
-    updateControls();
     updatePortraitLayout();
     loadLoras()
       .catch((err) => setStatus(err.message, true))
-      .finally(() => loadGallery().catch((err) => setStatus(err.message, true)));
+      .finally(() => {
+        loadFormState();
+        updateControls();
+        loadGallery().catch((err) => setStatus(err.message, true));
+      });
   </script>
 </body>
 </html>
