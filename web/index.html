@@ -57,6 +57,7 @@
       overflow: hidden;
       container-type: size;
       container-name: form;
+      position: relative;
     }
 
     body.portrait .form-panel {
@@ -85,6 +86,137 @@
     }
 
     .title { font-size: 1.35em; font-weight: 600; letter-spacing: -0.02em; }
+
+    .form-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5em;
+      flex-shrink: 0;
+    }
+
+    .help-btn {
+      width: 1.75em;
+      height: 1.75em;
+      flex-shrink: 0;
+      border-radius: 9999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.5);
+      font: inherit;
+      font-size: 0.82em;
+      font-weight: 600;
+      line-height: 1;
+      cursor: help;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+
+    .help-btn:hover,
+    .help-btn:focus-visible {
+      border-color: rgba(99, 132, 255, 0.45);
+      background: rgba(99, 132, 255, 0.12);
+      color: rgba(255,255,255,0.85);
+      outline: none;
+    }
+
+    .help-btn[aria-expanded="true"] {
+      border-color: rgba(99, 132, 255, 0.55);
+      background: rgba(99, 132, 255, 0.18);
+      color: #e8eaef;
+    }
+
+    .help-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      border-radius: inherit;
+      background: rgba(11, 13, 18, 0.96);
+      padding: 0.9em 1em;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.15s, visibility 0.15s;
+    }
+
+    .form-panel.help-visible .help-overlay {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .help-title {
+      margin: 0 0 0.45em;
+      font-size: 0.72em;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: rgba(255,255,255,0.45);
+    }
+
+    .help-title:not(:first-child) {
+      margin-top: 0.85em;
+    }
+
+    .help-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .help-list li {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.65em;
+      padding: 0.22em 0;
+      font-size: 0.88em;
+      color: rgba(255,255,255,0.78);
+    }
+
+    .help-list .help-keys {
+      flex-shrink: 0;
+      text-align: right;
+      color: rgba(255,255,255,0.55);
+      font-size: 0.92em;
+    }
+
+    .help-kbd {
+      display: inline-block;
+      padding: 0.08em 0.38em;
+      border-radius: 0.3em;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.08);
+      font-size: 0.9em;
+      line-height: 1.35;
+      font-family: inherit;
+      color: rgba(255,255,255,0.82);
+    }
+
+    .help-notes {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 0.84em;
+      color: rgba(255,255,255,0.62);
+      line-height: 1.45;
+    }
+
+    .help-notes li {
+      padding: 0.18em 0;
+    }
+
+    .help-notes li::before {
+      content: "·";
+      margin-right: 0.35em;
+      color: rgba(255,255,255,0.28);
+    }
+
+    .help-notes code {
+      font-size: 0.95em;
+      color: rgba(255,255,255,0.78);
+    }
+
     .field-label {
       display: block;
       font-size: 0.72em;
@@ -502,9 +634,32 @@
 </head>
 <body>
   <div class="shell" id="shell">
-    <section class="panel form-panel">
+    <section class="panel form-panel" id="form-panel">
       <div class="form-header">
         <h1 class="title">z-image</h1>
+        <button type="button" id="help-btn" class="help-btn" aria-label="Help" aria-expanded="false">?</button>
+      </div>
+
+      <div id="help-overlay" class="help-overlay" aria-hidden="true">
+        <p class="help-title">Shortcuts</p>
+        <ul class="help-list">
+          <li><span>Preview (3 steps)</span><span class="help-keys"><kbd class="help-kbd">P</kbd> <kbd class="help-kbd">Ctrl+Enter</kbd></span></li>
+          <li><span>Refine (8 steps, same seed)</span><span class="help-keys"><kbd class="help-kbd">R</kbd> <kbd class="help-kbd">Shift+Enter</kbd></span></li>
+          <li><span>Generate (8 steps, new settings)</span><span class="help-keys"><kbd class="help-kbd">G</kbd> <kbd class="help-kbd">Shift+Enter</kbd></span></li>
+          <li><span>Stop queue (same mode again)</span><span class="help-keys"><kbd class="help-kbd">click</kbd></span></li>
+          <li><span>Gallery prev / next</span><span class="help-keys"><kbd class="help-kbd">←</kbd> <kbd class="help-kbd">→</kbd></span></li>
+          <li><span>First / last image</span><span class="help-keys"><kbd class="help-kbd">Home</kbd> <kbd class="help-kbd">End</kbd></span></li>
+          <li><span>Delete image</span><span class="help-keys"><kbd class="help-kbd">Delete</kbd></span></li>
+          <li><span>Form / gallery (portrait)</span><span class="help-keys"><kbd class="help-kbd">↑</kbd> <kbd class="help-kbd">↓</kbd></span></li>
+        </ul>
+        <p class="help-title">Nuance</p>
+        <ul class="help-notes">
+          <li>Preview is fast; Refine re-runs 8 steps at the preview seed. Change prompt or size to unlock a fresh generate.</li>
+          <li>Seeds advance from last + 1 unless you set one. <code>{A|B}</code> templates cycle variants per image.</li>
+          <li>Any width/height works; non-÷16 sizes generate slightly larger, then downscale (yellow warning).</li>
+          <li>Upload captions the image into the form — it does not run img2img.</li>
+          <li>Natural-language prompts beat tag soup. Describe hands, faces, and lighting explicitly.</li>
+        </ul>
       </div>
 
       <form id="gen-form">
@@ -2019,14 +2174,14 @@
       saveFormState();
       onFormContextChange();
     });
-        $('width').addEventListener('input', () => {
-          updateVaeWarnings()
-          onFormContextChange()
-        })
-        $('height').addEventListener('input', () => {
-          updateVaeWarnings()
-          onFormContextChange()
-        });
+    $('width').addEventListener('input', () => {
+      updateVaeWarnings();
+      onFormContextChange();
+    });
+    $('height').addEventListener('input', () => {
+      updateVaeWarnings();
+      onFormContextChange();
+    });
     $('width').addEventListener('blur', () => onSizeBlur($('width')));
     $('height').addEventListener('blur', () => onSizeBlur($('height')));
     window.addEventListener('resize', updatePortraitLayout);
@@ -2037,7 +2192,49 @@
     document.addEventListener('touchstart', onPortraitTouchStart, { passive: true });
     document.addEventListener('touchend', onPortraitTouchEnd, { passive: true });
 
+    const formPanel = $('form-panel');
+    const helpBtn = $('help-btn');
+    const helpOverlay = $('help-overlay');
+    let helpPinned = false;
+    const canHoverHelp = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+    function setHelpOpen(open) {
+      formPanel.classList.toggle('help-visible', open);
+      helpBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      helpOverlay.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+
+    function closeHelp() {
+      helpPinned = false;
+      setHelpOpen(false);
+    }
+
+    helpBtn.addEventListener('mouseenter', () => {
+      if (canHoverHelp()) {
+        setHelpOpen(true);
+      }
+    });
+    formPanel.addEventListener('mouseleave', () => {
+      if (canHoverHelp() && !helpPinned) {
+        setHelpOpen(false);
+      }
+    });
+    helpBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (canHoverHelp()) {
+        return;
+      }
+      helpPinned = !helpPinned;
+      setHelpOpen(helpPinned);
+    });
+
     document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && formPanel.classList.contains('help-visible')) {
+        e.preventDefault();
+        closeHelp();
+        return;
+      }
+
       if (e.key === 'End' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         if (canSecondary()) {
