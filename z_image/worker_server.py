@@ -41,7 +41,7 @@ from .init_image import load_init_image
 from .job_monitor import JobMonitor, log_summary
 from .loras import list_catalog_entries, normalize_prompt, resolve_path
 from .pipeline_cache import IdleGuard, current_pipe
-from .metadata import GenMeta, save_image
+from .metadata import GenMeta, read_gen_meta, save_image
 from .pipeline_jobs import generate_one, recover_pipe, run_batch_on_pipe
 from .prompt_embed_cache import prune, remove_legacy_layout
 from .templates import resolve_prompt
@@ -394,6 +394,24 @@ class Handler(BaseHTTPRequestHandler):
             except FileNotFoundError:
                 self._json(404, {"error": "not found"})
             return
+        if parsed.path == "/gallery/meta":
+            params = parse_qs(parsed.query)
+            rel_path = params.get("path", [None])[0]
+            if not rel_path:
+                self._json(400, {"error": "path required"})
+                return
+            try:
+                path = open_gallery_file(rel_path)
+                meta = read_gen_meta(path)
+                if meta is None:
+                    self._json(404, {"error": "no metadata"})
+                    return
+                self._json(200, meta)
+            except ValueError as e:
+                self._json(400, {"error": str(e)})
+            except FileNotFoundError:
+                self._json(404, {"error": "not found"})
+            return
         self._json(404, {"error": "not found"})
 
     def do_DELETE(self) -> None:
@@ -569,6 +587,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", mime)
         self.send_header("Content-Length", str(size))
+        if mime.startswith("image/"):
+            self.send_header("Cache-Control", "private, max-age=86400")
         if mime.startswith("text/html"):
             self.send_header("Cache-Control", "no-cache")
         self.end_headers()

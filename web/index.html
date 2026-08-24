@@ -778,7 +778,7 @@
     let viewerContext = null;
     let activeGenMode = null;
     let viewerToken = 0;
-    const imageCache = new Map();
+    const metaCache = new Map();
 
     const PREVIEW_STEPS = 3;
     const REFINED_STEPS = 8;
@@ -1289,6 +1289,10 @@
       return `/gallery/file?path=${encodeURIComponent(path)}`;
     }
 
+    function metaUrl(path) {
+      return `/gallery/meta?path=${encodeURIComponent(path)}`;
+    }
+
     async function readPngParameters(blob) {
       const buf = new Uint8Array(await blob.arrayBuffer());
       const sig = [137, 80, 78, 71, 13, 10, 26, 10];
@@ -1449,11 +1453,8 @@
       });
     }
 
-    function clearImageCache() {
-      for (const entry of imageCache.values()) {
-        URL.revokeObjectURL(entry.objectUrl);
-      }
-      imageCache.clear();
+    function clearMetaCache() {
+      metaCache.clear();
     }
 
     function updateViewerPrompt(meta) {
@@ -1467,33 +1468,44 @@
       }
     }
 
+    async function loadViewerMeta(item) {
+      let meta = metaCache.get(item.path);
+      if (meta) {
+        return meta;
+      }
+      const fallback = parseFilenameMeta(item.name);
+      try {
+        const res = await fetch(metaUrl(item.path));
+        if (res.ok) {
+          meta = await res.json();
+        } else {
+          meta = fallback;
+        }
+      } catch {
+        meta = fallback;
+      }
+      if (!meta) {
+        return null;
+      }
+      if (meta.lora) {
+        meta.lora = resolveLoraName(meta.lora);
+      }
+      metaCache.set(item.path, meta);
+      return meta;
+    }
+
     async function loadViewerImage(item) {
       const token = ++viewerToken;
       const img = $('preview');
-      let cached = imageCache.get(item.path);
+      img.src = fileUrl(item.path);
 
-      if (!cached) {
-        try {
-          const res = await fetch(fileUrl(item.path));
-          if (!res.ok) throw new Error('Failed to load image');
-          const blob = await res.blob();
-          if (token !== viewerToken) return;
-
-          const meta = await extractMetaFromBlob(blob, item.name);
-          cached = { objectUrl: URL.createObjectURL(blob), meta };
-          imageCache.set(item.path, cached);
-        } catch {
-          if (token !== viewerToken) return;
-          img.removeAttribute('src');
-          return;
-        }
+      const meta = await loadViewerMeta(item);
+      if (token !== viewerToken) {
+        return;
       }
-
-      if (token !== viewerToken) return;
-      img.src = cached.objectUrl;
-      applyViewerState(cached.meta);
-      syncFormFromMeta(cached.meta);
-      updateViewerPrompt(cached.meta);
+      applyViewerState(meta);
+      syncFormFromMeta(meta);
+      updateViewerPrompt(meta);
     }
 
     function updateDeleteButton() {
@@ -1525,11 +1537,7 @@
         throw new Error(data.error || 'Delete failed');
       }
 
-      const cached = imageCache.get(item.path);
-      if (cached) {
-        URL.revokeObjectURL(cached.objectUrl);
-        imageCache.delete(item.path);
-      }
+      metaCache.delete(item.path);
 
       images.splice(index, 1);
       if (index >= images.length) {
@@ -1568,7 +1576,7 @@
         viewerContext = null;
         img.classList.add('hidden');
         img.removeAttribute('src');
-        clearImageCache();
+        clearMetaCache();
         empty.classList.remove('hidden');
         meta.textContent = '';
         delete meta.dataset.tip;
@@ -1803,11 +1811,7 @@
     }
 
     async function revealInGallery(path) {
-      const stale = imageCache.get(path);
-      if (stale) {
-        URL.revokeObjectURL(stale.objectUrl);
-        imageCache.delete(path);
-      }
+      metaCache.delete(path);
       await loadGallery({ keepPath: path });
     }
 
@@ -1976,10 +1980,10 @@
         if (!failed) {
           const item = images[index];
           if (item) {
-            const cached = imageCache.get(item.path);
-            if (cached) {
-              applyViewerState(cached.meta);
-              syncFormFromMeta(cached.meta);
+            const meta = metaCache.get(item.path);
+            if (meta) {
+              applyViewerState(meta);
+              syncFormFromMeta(meta);
             }
           }
         }
