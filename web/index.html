@@ -979,6 +979,7 @@
       };
       push('Model', 'model_s');
       push('LoRA', 'lora_s');
+      push('TE load', 'te_load_s');
       push('Encode', 'encode_s');
       push('Denoise', 'denoise_s');
       if (totalS != null && totalS > 0) {
@@ -992,7 +993,7 @@
         return agg;
       }
       const out = agg ? { ...agg } : {};
-      for (const key of ['model_s', 'lora_s', 'encode_s', 'denoise_s']) {
+      for (const key of ['model_s', 'lora_s', 'te_load_s', 'encode_s', 'denoise_s']) {
         if (next.timing[key] != null) {
           out[key] = Math.round(((out[key] || 0) + next.timing[key]) * 100) / 100;
         }
@@ -1674,7 +1675,7 @@
       setGenerating(true);
       genProgress = count > 1 ? { current: 0, total: count } : null;
       const label = modeLabel(mode);
-      setStatus('');
+      let failed = false;
       try {
         let last = null;
         let done = 0;
@@ -1770,6 +1771,7 @@
         playDoneSound();
         scrollToGallery();
       } catch (err) {
+        failed = true;
         setStatus(err.message, true);
         playDoneSound();
       } finally {
@@ -1777,12 +1779,14 @@
         genProgress = null;
         activeGenMode = null;
         setGenerating(false);
-        const item = images[index];
-        if (item) {
-          const cached = imageCache.get(item.path);
-          if (cached) {
-            applyViewerState(cached.meta);
-            syncFormFromMeta(cached.meta);
+        if (!failed) {
+          const item = images[index];
+          if (item) {
+            const cached = imageCache.get(item.path);
+            if (cached) {
+              applyViewerState(cached.meta);
+              syncFormFromMeta(cached.meta);
+            }
           }
         }
         updateSeedField();

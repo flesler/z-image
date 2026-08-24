@@ -17,7 +17,7 @@ from .config import default_precision, load_pipeline
 from .exceptions import ClientDisconnected
 from .log import log as write_log
 from .metadata import GenMeta, save_image
-from .text_encoder import encode_prompts, pipe_device
+from .text_encoder import encode_prompts, pipe_device, release_text_encoder
 
 
 def _load_loras(pipe, loras: list[tuple[str, float]] | None) -> None:
@@ -73,6 +73,16 @@ def recover_pipe(pipe) -> None:
             scheduler._step_index = None
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+    release_text_encoder(pipe)
+    try:
+        dev = pipe_device(pipe)
+        if dev.type == "cuda":
+            if next(pipe.transformer.parameters()).device.type != "cuda":
+                pipe.transformer.to(dev)
+            if pipe.vae is not None and next(pipe.vae.parameters()).device.type != "cuda":
+                pipe.vae.to(dev)
+    except Exception:
+        pass
 
 
 def _lora_key(loras: list[tuple[str, float]] | None) -> tuple[tuple[str, float], ...]:
@@ -624,7 +634,6 @@ def generate_one(
     model_s = time.perf_counter() - t_load
     if model_s > 0:
         timings["model_s"] = model_s
-    encode_s = 0.0
     if prompt is not None and prompt_embeds is None:
         from .loras import apply_triggers, lora_name
         from .templates import all_variants
@@ -640,10 +649,12 @@ def generate_one(
         else:
             encode_key = prompt
         t_enc = time.perf_counter()
-        prompt_embeds = encode_prompts(pipe, encode_list)[encode_key]
-        encode_s = time.perf_counter() - t_enc
+        enc_stats: dict[str, float] = {}
+        prompt_embeds = encode_prompts(pipe, encode_list, stats=enc_stats)[encode_key]
+        timings.update(enc_stats)
+        if "encode_s" not in timings:
+            timings["encode_s"] = time.perf_counter() - t_enc
         prompt = None
-    timings["encode_s"] = encode_s
     try:
         t_den = time.perf_counter()
         image = run_on_pipe(

@@ -77,6 +77,7 @@ def encode_prompts(
     prompts: Iterable[str],
     *,
     release_after: bool = True,
+    stats: dict[str, float] | None = None,
 ) -> dict[str, list[torch.Tensor]]:
     unique = list(dict.fromkeys(prompts))
     if not unique:
@@ -97,18 +98,30 @@ def encode_prompts(
 
     if to_encode:
         embed_cache.maybe_prune()
-        ensure_text_encoder(pipe)
-        if len(to_encode) > 1:
-            _log(f"encoding {len(to_encode)} prompt(s) in one text-encoder load")
-        for prompt in to_encode:
-            t_one = time.perf_counter()
-            embeds, _ = pipe.encode_prompt(prompt, do_classifier_free_guidance=False)
-            embed_cache.save(prompt, precision, embeds, encode_time_s=time.perf_counter() - t_one)
-            cached[prompt] = embeds
-        release_text_encoder(pipe)
+        te_load_s = 0.0
+        encode_s = 0.0
+        try:
+            t_load = time.perf_counter()
+            ensure_text_encoder(pipe)
+            te_load_s = time.perf_counter() - t_load
+            if len(to_encode) > 1:
+                _log(f"encoding {len(to_encode)} prompt(s) in one text-encoder load")
+            for prompt in to_encode:
+                t_one = time.perf_counter()
+                embeds, _ = pipe.encode_prompt(prompt, do_classifier_free_guidance=False)
+                one_s = time.perf_counter() - t_one
+                encode_s += one_s
+                embed_cache.save(prompt, precision, embeds, encode_time_s=one_s)
+                cached[prompt] = embeds
+        finally:
+            if release_after:
+                release_text_encoder(pipe)
+        if stats is not None:
+            stats["te_load_s"] = te_load_s
+            stats["encode_s"] = encode_s
         _log(
             f"encoded {len(to_encode)} prompt(s), {len(unique) - len(to_encode)} disk hit(s) "
-            f"in {time.perf_counter() - t0:.1f}s"
+            f"in {time.perf_counter() - t0:.1f}s (te_load={te_load_s:.1f}s encode={encode_s:.1f}s)"
         )
     else:
         if pipe.text_encoder is not None:
