@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import math
 import re
 from typing import NamedTuple
 
 DEFAULT_WIDTH = 1024
 DEFAULT_HEIGHT = 1024
 VAE_ALIGN = 16
+MIN_DIM = 64
+MAX_DIM = 4096
 
 # Reference width for --aspect-ratio (1080 → 1088 for VAE alignment).
 ASPECT_BASE_CHOICES = (1024, 1080)
@@ -32,15 +35,33 @@ def size_choices() -> list[str]:
     return sorted(SIZE_PRESETS)
 
 
+def ceil_vae_align(value: int) -> int:
+    v = int(value)
+    return max(VAE_ALIGN, math.ceil(v / VAE_ALIGN) * VAE_ALIGN)
+
+
 def snap_dim(value: float) -> int:
-    return max(VAE_ALIGN, round(value / VAE_ALIGN) * VAE_ALIGN)
+    return ceil_vae_align(int(value))
 
 
-def require_vae_aligned(value: int, *, name: str = "dimension") -> int:
-    value = int(value)
-    if value % VAE_ALIGN != 0:
-        raise ValueError(f"{name} must be divisible by {VAE_ALIGN} (got {value})")
-    return value
+def parse_output_dim(value: int, *, name: str = "dimension") -> int:
+    v = int(value)
+    if v < MIN_DIM or v > MAX_DIM:
+        raise ValueError(f"{name} must be between {MIN_DIM} and {MAX_DIM} (got {v})")
+    return v
+
+
+def resolve_generation_dims(width: int, height: int) -> tuple[int, int, int, int]:
+    """Return (output_w, output_h, gen_w, gen_h). Gen dims are VAE-aligned (ceil to 16)."""
+    out_w = parse_output_dim(width, name="width")
+    out_h = parse_output_dim(height, name="height")
+    gen_w = ceil_vae_align(out_w)
+    gen_h = ceil_vae_align(out_h)
+    return out_w, out_h, gen_w, gen_h
+
+
+def is_vae_aligned(value: int) -> bool:
+    return int(value) % VAE_ALIGN == 0
 
 
 def resolve_aspect_base(base: int) -> int:
@@ -106,4 +127,4 @@ def resolve_dimensions(
         return DEFAULT_WIDTH, DEFAULT_HEIGHT
     if width is None or height is None:
         raise SystemExit("provide both --width and --height, or use --size / --aspect-ratio")
-    return snap_dim(width), snap_dim(height)
+    return parse_output_dim(width, name="width"), parse_output_dim(height, name="height")

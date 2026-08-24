@@ -16,6 +16,7 @@ from PIL import Image
 from .config import default_precision, load_pipeline
 from .exceptions import ClientDisconnected
 from .log import log as write_log
+from .init_image import fit_output_size
 from .metadata import GenMeta, save_image
 from .text_encoder import encode_prompts, pipe_device, release_text_encoder
 
@@ -324,6 +325,8 @@ def _denoise_on_pipe_with_snapshots(
             completed = i + 1
             if completed in pending:
                 image = _latents_to_pil(pipe, x0)
+                if meta is not None:
+                    image = fit_output_size(image, meta.width, meta.height)
                 output = Path(snapshots[completed])
                 if meta is not None:
                     save_image(
@@ -430,6 +433,8 @@ def run_batch_on_pipe(
     *,
     width: int,
     height: int,
+    output_width: int | None = None,
+    output_height: int | None = None,
     reuse_steps: bool = False,
     init_image: Image.Image | None = None,
     strength: float | None = None,
@@ -440,6 +445,8 @@ def run_batch_on_pipe(
     """Run jobs grouped by model, then steps, then prompts."""
     if not jobs:
         return [], 0.0, 0.0
+    out_w = output_width if output_width is not None else width
+    out_h = output_height if output_height is not None else height
     if init_image is not None and reuse_steps:
         raise ValueError("img2img batch does not support --reuse-steps")
 
@@ -516,8 +523,8 @@ def run_batch_on_pipe(
                     try:
                         job_meta = GenMeta(
                             prompt=job["prompt"],
-                            width=width,
-                            height=height,
+                            width=out_w,
+                            height=out_h,
                             seed=int(job["seed"]),
                             steps=job_steps(job),
                             template=job.get("template"),
@@ -570,12 +577,12 @@ def run_batch_on_pipe(
                     )
                 output = Path(job["output"])
                 save_image(
-                    image,
+                    fit_output_size(image, out_w, out_h),
                     output,
                     GenMeta(
                         prompt=job["prompt"],
-                        width=width,
-                        height=height,
+                        width=out_w,
+                        height=out_h,
                         seed=int(job["seed"]),
                         steps=step_count,
                         template=job.get("template"),
@@ -627,7 +634,11 @@ def generate_one(
     prompt_embeds: list[torch.Tensor] | None = None,
     init_image: Image.Image | None = None,
     strength: float | None = None,
+    output_width: int | None = None,
+    output_height: int | None = None,
 ) -> tuple[Image.Image, dict[str, float]]:
+    out_w = output_width if output_width is not None else width
+    out_h = output_height if output_height is not None else height
     timings: dict[str, float] = {}
     t_load = time.perf_counter()
     pipe = load_pipeline(precision=precision)
@@ -671,7 +682,7 @@ def generate_one(
             timings=timings,
         )
         timings["denoise_s"] = time.perf_counter() - t_den
-        return image, timings
+        return fit_output_size(image, out_w, out_h), timings
     except Exception:
         traceback.print_exc()
         raise

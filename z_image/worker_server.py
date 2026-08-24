@@ -34,7 +34,7 @@ from .caption import caption_image, caption_model_device, unload_caption_model
 from .gallery import gallery_root, list_images, open_gallery_file, delete_image
 from .metadata import read_prompt
 from .naming import output_filename
-from .sizes import require_vae_aligned
+from .sizes import resolve_generation_dims
 from .exceptions import ClientDisconnected
 from .gpu_monitor import log_pipe, reset_vram_peak, snapshot
 from .init_image import load_init_image
@@ -150,8 +150,10 @@ def _seed_from_filename(name: str) -> int | None:
 
 def run_generate_job(body: dict) -> dict:
     raw_prompt = normalize_prompt(body["prompt"])
-    width = require_vae_aligned(int(body.get("width", 1024)), name="width")
-    height = require_vae_aligned(int(body.get("height", 1024)), name="height")
+    out_w, out_h, gen_w, gen_h = resolve_generation_dims(
+        int(body.get("width", 1024)),
+        int(body.get("height", 1024)),
+    )
     seed = body.get("seed")
     if seed is None:
         seed = random.randint(0, 2**31 - 1)
@@ -171,8 +173,8 @@ def run_generate_job(body: dict) -> dict:
         lora_names = [entry.get("name") or entry.get("file") for entry in lora_entries] or None
         filename = output_filename(
             save_prompt,
-            width,
-            height,
+            out_w,
+            out_h,
             seed,
             steps,
             strength=img_strength if body.get("image") else None,
@@ -207,7 +209,7 @@ def run_generate_job(body: dict) -> dict:
     strength = None
     if body.get("image"):
         strength = resolve_strength(body.get("strength"))
-        init_image = load_init_image(body["image"], width=width, height=height)
+        init_image = load_init_image(body["image"], width=gen_w, height=gen_h)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     _release_caption_gpu()
@@ -222,8 +224,10 @@ def run_generate_job(body: dict) -> dict:
             prompt=save_prompt,
             template=template,
             steps=steps,
-            width=width,
-            height=height,
+            width=gen_w,
+            height=gen_h,
+            output_width=out_w,
+            output_height=out_h,
             seed=seed,
             precision=precision,
             loras=loras or None,
@@ -242,8 +246,8 @@ def run_generate_job(body: dict) -> dict:
         output,
         GenMeta(
             prompt=save_prompt,
-            width=width,
-            height=height,
+            width=out_w,
+            height=out_h,
             seed=seed,
             steps=steps,
             template=template,
@@ -276,14 +280,16 @@ def run_generate_batch(body: dict, *, on_image=None) -> dict:
     if not jobs:
         raise ValueError("jobs must not be empty")
 
-    width = require_vae_aligned(int(body.get("width", 1024)), name="width")
-    height = require_vae_aligned(int(body.get("height", 1024)), name="height")
+    out_w, out_h, gen_w, gen_h = resolve_generation_dims(
+        int(body.get("width", 1024)),
+        int(body.get("height", 1024)),
+    )
     precision = resolve_precision(body.get("precision"))
     init_image = None
     strength = None
     if body.get("image"):
         strength = resolve_strength(body.get("strength"))
-        init_image = load_init_image(body["image"], width=width, height=height)
+        init_image = load_init_image(body["image"], width=gen_w, height=gen_h)
 
     reset_vram_peak()
     _release_caption_gpu()
@@ -302,8 +308,10 @@ def run_generate_batch(body: dict, *, on_image=None) -> dict:
         results, encode_s, denoise_s = run_batch_on_pipe(
             pipe,
             resolved_jobs,
-            width=width,
-            height=height,
+            width=gen_w,
+            height=gen_h,
+            output_width=out_w,
+            output_height=out_h,
             reuse_steps=body.get("reuse_steps", False),
             init_image=init_image,
             strength=strength,

@@ -94,6 +94,10 @@
       margin-bottom: 0.25em;
     }
 
+    .field.warn-vae .field-label {
+      color: #e8c547;
+    }
+
     #gen-form {
       flex: 1 1 auto;
       min-height: 0;
@@ -504,39 +508,46 @@
       </div>
 
       <form id="gen-form">
-        <label class="field field-prompt has-tip" data-tip="Describe the scene, or use {option A|option B} templates — seeds cycle through combinations.">
+        <label class="field field-prompt has-tip"
+          data-tip="Describe the scene, or use {option A|option B} templates — seeds cycle through combinations">
           <span class="field-label">Prompt</span>
           <textarea id="prompt" required placeholder="Describe the image…"></textarea>
         </label>
 
-        <label class="field field-width has-tip" data-tip="Output width in pixels. Snaps to multiples of 16 (VAE).">
-          <span class="field-label">Width</span>
+        <label class="field field-width has-tip"
+          data-tip="Output width in pixels. Non-multiples of 16 are generated larger then downscaled">
+          <span class="field-label" id="width-label">Width</span>
           <input id="width" type="number" min="256" max="4096" step="1" value="1024">
         </label>
 
-        <label class="field field-height has-tip" data-tip="Output height in pixels. Snaps to multiples of 16 (VAE).">
-          <span class="field-label">Height</span>
+        <label class="field field-height has-tip"
+          data-tip="Output height in pixels. Non-multiples of 16 are generated larger then downscaled">
+          <span class="field-label" id="height-label">Height</span>
           <input id="height" type="number" min="256" max="4096" step="1" value="1024">
         </label>
 
-        <label class="field field-count has-tip" data-tip="Images per run. Each uses the next seed; templates advance one variant per image.">
+        <label class="field field-count has-tip"
+          data-tip="Images per run. Each uses the next seed; templates advance one variant per image">
           <span class="field-label">Count</span>
           <input id="count" type="number" min="1" max="50" value="1">
         </label>
 
-        <label class="field field-seed has-tip" data-tip="Leave random or enter a number. Preview/Generate start at last seed + 1 unless you override.">
+        <label class="field field-seed has-tip"
+          data-tip="Leave random or enter a number. Preview/Generate start at last seed + 1 unless you override">
           <span class="field-label">Seed</span>
           <input id="seed" type="text" value="random" placeholder="random (-1)" inputmode="numeric" autocomplete="off">
         </label>
 
-        <label class="field field-lora has-tip" data-tip="Optional style adapter from the LoRA catalog. Strength uses each entry's default from lib/loras.json.">
+        <label class="field field-lora has-tip"
+          data-tip="Optional style adapter from the LoRA catalog. Strength uses each entry's default from lib/loras.json">
           <span class="field-label">LoRA</span>
           <select id="lora">
             <option value="">None</option>
           </select>
         </label>
 
-        <label class="field field-lora-example has-tip" data-tip="Example prompts from the catalog. Picking one always fills the prompt field.">
+        <label class="field field-lora-example has-tip"
+          data-tip="Example prompts from the catalog. Picking one always fills the prompt field">
           <span class="field-label">Example</span>
           <select id="lora-example" disabled>
             <option value="">—</option>
@@ -545,7 +556,8 @@
 
         <div class="field field-upload">
           <span class="field-label">From image</span>
-          <label id="upload-btn" class="upload-btn has-tip tip-below" data-tip="Caption the image and fill prompt + size. Does not run img2img.">
+          <label id="upload-btn" class="upload-btn has-tip tip-below"
+            data-tip="Caption the image and fill prompt + size. Does not run img2img">
             <input id="upload" type="file" accept="image/*">
             <span id="upload-label">Choose image…</span>
           </label>
@@ -616,6 +628,8 @@
     const PREVIEW_STEPS = 3;
     const REFINED_STEPS = 8;
     const VAE_ALIGN = 16;
+        const MIN_DIM = 256
+        const MAX_DIM = 4096;
     const MAX_DUP_ATTEMPTS = 50;
     const FORM_STORAGE_KEY = 'z-image-form';
     let loraCatalog = [];
@@ -624,22 +638,46 @@
     let touchStartY = 0;
     let deleteSkipConfirm = false;
 
-    function snapDim(value) {
-      const n = parseInt(value, 10) || 1024;
-      return Math.max(VAE_ALIGN, Math.round(n / VAE_ALIGN) * VAE_ALIGN);
+        function parseDim(value) {
+          const n = parseInt(String(value), 10)
+          if (!Number.isFinite(n)) {
+            return 1024
+          }
+          return Math.min(MAX_DIM, Math.max(MIN_DIM, n))
+        }
+
+        function isVaeAligned(value) {
+          return parseDim(value) % VAE_ALIGN === 0
+        }
+
+        function updateVaeWarnings() {
+          const wField = document.querySelector('.field-width')
+          const hField = document.querySelector('.field-height')
+          const wWarn = !isVaeAligned($('width').value)
+          const hWarn = !isVaeAligned($('height').value)
+          if (wField) {
+            wField.classList.toggle('warn-vae', wWarn)
+          }
+          if (hField) {
+            hField.classList.toggle('warn-vae', hWarn)
+          }
+          $('width-label').textContent = wWarn ? 'Width ⚠' : 'Width'
+          $('height-label').textContent = hWarn ? 'Height ⚠' : 'Height';
     }
 
-    function snapSizeField(field) {
-      field.value = snapDim(field.value);
+        function clampSizeField(field) {
+          field.value = parseDim(field.value);
     }
 
-    function snapSizeFields() {
-      snapSizeField($('width'));
-      snapSizeField($('height'));
+        function clampSizeFields() {
+          clampSizeField($('width'))
+          clampSizeField($('height'))
+          updateVaeWarnings();
     }
 
     function onSizeBlur(field) {
-      snapSizeField(field);
+      clampSizeField(field)
+      updateVaeWarnings();
       onFormContextChange();
       updatePortraitLayout();
     }
@@ -684,6 +722,7 @@
       } catch {
         // ignore corrupt storage
       }
+      updateVaeWarnings();
     }
 
     function canAbortQueue() {
@@ -697,8 +736,8 @@
       }
       viewerContext = {
         prompt: (meta.template || meta.prompt || '').trim(),
-        width: meta.width != null ? snapDim(meta.width) : null,
-        height: meta.height != null ? snapDim(meta.height) : null,
+        width: meta.width != null ? parseDim(meta.width) : null,
+        height: meta.height != null ? parseDim(meta.height) : null,
         lora: meta.loraKnown ? (meta.lora ?? null) : null,
       };
     }
@@ -710,10 +749,10 @@
       if ($('prompt').value.trim() !== viewerContext.prompt) {
         return false;
       }
-      if (snapDim($('width').value) !== viewerContext.width) {
+      if (parseDim($('width').value) !== viewerContext.width) {
         return false;
       }
-      if (snapDim($('height').value) !== viewerContext.height) {
+      if (parseDim($('height').value) !== viewerContext.height) {
         return false;
       }
       if (($('lora').value || '') !== (viewerContext.lora || '')) {
@@ -1220,7 +1259,7 @@
       if (meta.loraKnown) {
         setLoraFromMeta(meta.lora);
       }
-      snapSizeFields();
+      clampSizeFields();
     }
 
     async function extractMetaFromBlob(blob, filename) {
@@ -1656,7 +1695,7 @@
       unlockDoneAudio();
 
       saveFormState();
-      snapSizeFields();
+      clampSizeFields();
 
       const count = mode === 'refined'
         ? 1
@@ -1980,8 +2019,14 @@
       saveFormState();
       onFormContextChange();
     });
-    $('width').addEventListener('input', onFormContextChange);
-    $('height').addEventListener('input', onFormContextChange);
+        $('width').addEventListener('input', () => {
+          updateVaeWarnings()
+          onFormContextChange()
+        })
+        $('height').addEventListener('input', () => {
+          updateVaeWarnings()
+          onFormContextChange()
+        });
     $('width').addEventListener('blur', () => onSizeBlur($('width')));
     $('height').addEventListener('blur', () => onSizeBlur($('height')));
     window.addEventListener('resize', updatePortraitLayout);
@@ -2056,6 +2101,7 @@
       .catch((err) => setStatus(err.message, true))
       .finally(() => {
         loadFormState();
+        updateVaeWarnings();
         const name = $('lora').value;
         syncExampleDropdown(name ? loraCatalog.find((item) => item.name === name) : null);
         updateControls();
