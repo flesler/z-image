@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>z-image</title>
   <style>
     html { box-sizing: border-box; }
@@ -22,8 +22,10 @@
     }
 
     body.portrait {
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
+      overflow: hidden;
+      height: 100dvh;
+      touch-action: none;
+      overscroll-behavior: none;
     }
 
     .shell {
@@ -35,10 +37,21 @@
     }
 
     body.portrait .shell {
-      height: auto;
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 200dvh;
       flex-direction: column;
       gap: 0;
       padding: 0;
+      z-index: 0;
+      transform: translateY(0);
+      transition: transform 0.28s ease-out;
+      will-change: transform;
+    }
+
+    body.portrait.portrait-gallery .shell {
+      transform: translateY(-100dvh);
     }
 
     .panel {
@@ -140,6 +153,14 @@
       transition: opacity 0.15s, visibility 0.15s;
     }
 
+    body.portrait .help-overlay {
+      touch-action: pan-y;
+    }
+
+    body.portrait #prompt {
+      touch-action: pan-y;
+    }
+
     .form-panel.help-visible .help-overlay {
       opacity: 1;
       visibility: visible;
@@ -172,6 +193,16 @@
       padding: 0.22em 0;
       font-size: 0.88em;
       color: rgba(255,255,255,0.78);
+    }
+
+    .help-touch-only {
+      display: none;
+    }
+
+    @media (hover: none), (pointer: coarse) {
+      .help-touch-only {
+        display: flex;
+      }
     }
 
     .help-list .help-keys {
@@ -659,6 +690,8 @@
           <li><span>First / last image</span><span class="help-keys"><kbd class="help-kbd">Home</kbd> <kbd class="help-kbd">End</kbd></span></li>
           <li><span>Delete image</span><span class="help-keys"><kbd class="help-kbd">Delete</kbd></span></li>
           <li><span>Form / gallery (portrait)</span><span class="help-keys"><kbd class="help-kbd">↑</kbd> <kbd class="help-kbd">↓</kbd></span></li>
+          <li class="help-touch-only"><span>Form / gallery (swipe)</span><span class="help-keys"><kbd class="help-kbd">↑</kbd> <kbd class="help-kbd">↓</kbd></span></li>
+          <li class="help-touch-only"><span>Gallery prev / next (swipe)</span><span class="help-keys"><kbd class="help-kbd">←</kbd> <kbd class="help-kbd">→</kbd></span></li>
         </ul>
         <p class="help-title">Nuance</p>
         <ul class="help-notes">
@@ -802,6 +835,7 @@
     let loraCatalog = [];
     let loraExamplePrompts = new Set();
     let portraitPanel = 0;
+    let touchStartX = 0;
     let touchStartY = 0;
     let deleteSkipConfirm = false;
 
@@ -987,13 +1021,37 @@
       const portrait = window.innerHeight > window.innerWidth;
       document.body.classList.toggle('portrait', portrait);
       if (portrait) {
-        syncPortraitPanel();
+        applyPortraitPanel({ smooth: false });
+      } else {
+        document.body.classList.remove('portrait-gallery');
+        const shell = document.querySelector('.shell');
+        if (shell) {
+          shell.style.transform = '';
+          shell.style.transition = '';
+        }
+        window.scrollTo(0, 0);
       }
       updateScrollJumpBtn();
     }
 
-    function panelScrollTop(panel) {
-      return window.scrollY + panel.getBoundingClientRect().top;
+    function applyPortraitPanel({ smooth = true } = {}) {
+      if (!document.body.classList.contains('portrait')) {
+        return;
+      }
+      document.body.classList.toggle('portrait-gallery', portraitPanel === 1);
+      const shell = document.querySelector('.shell');
+      if (!shell) {
+        return;
+      }
+      if (smooth) {
+        shell.style.transition = '';
+      } else {
+        shell.style.transition = 'none';
+        requestAnimationFrame(() => {
+          shell.style.transition = '';
+        });
+      }
+      updateScrollJumpBtn();
     }
 
     function scrollToPanel(index, { smooth = true } = {}) {
@@ -1001,10 +1059,7 @@
         return;
       }
       portraitPanel = index;
-      const panel = index === 0 ? $('form-panel') : $('gallery-panel');
-      const top = Math.round(panelScrollTop(panel));
-      window.scrollTo({ top, left: 0, behavior: smooth ? 'smooth' : 'auto' });
-      updateScrollJumpBtn();
+      applyPortraitPanel({ smooth });
     }
 
     function scrollToForm() {
@@ -1015,38 +1070,64 @@
       scrollToPanel(1);
     }
 
-    function syncPortraitPanel() {
-      if (!document.body.classList.contains('portrait')) {
-        return;
-      }
-      const mid = window.scrollY + window.innerHeight * 0.35;
-      const galleryTop = panelScrollTop($('gallery-panel'));
-      portraitPanel = mid >= galleryTop ? 1 : 0;
-    }
-
     function isOnGalleryPanel() {
       return portraitPanel === 1;
     }
 
-    function onPortraitTouchStart(e) {
-      if (!document.body.classList.contains('portrait')) {
-        return;
-      }
-      touchStartY = e.touches[0].clientY;
+    function isCoarsePointer() {
+      return window.matchMedia('(hover: none), (pointer: coarse)').matches;
     }
 
-    function onPortraitTouchEnd(e) {
-      if (!document.body.classList.contains('portrait')) {
+    function canSwipeGalleryHorizontal() {
+      if (!images.length) {
+        return false;
+      }
+      if (document.body.classList.contains('portrait')) {
+        return isOnGalleryPanel();
+      }
+      return isCoarsePointer();
+    }
+
+    const SWIPE_MIN = 48;
+
+    function onMobileTouchStart(e) {
+      if (!isCoarsePointer() || e.touches.length !== 1) {
         return;
       }
-      const dy = e.changedTouches[0].clientY - touchStartY;
-      if (Math.abs(dy) < 40) {
+      const t = e.touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+    }
+
+    function onMobileTouchEnd(e) {
+      if (!isCoarsePointer()) {
         return;
       }
-      if (dy < 0 && portraitPanel === 0) {
-        scrollToGallery();
-      } else if (dy > 0 && portraitPanel === 1) {
-        scrollToForm();
+      if (e.changedTouches.length !== 1) {
+        return;
+      }
+      const t = e.changedTouches[0];
+      const dx = t.clientX - touchStartX;
+      const dy = t.clientY - touchStartY;
+      if (Math.abs(dx) < SWIPE_MIN && Math.abs(dy) < SWIPE_MIN) {
+        return;
+      }
+
+      if (Math.abs(dx) > Math.abs(dy)) {
+        if (!canSwipeGalleryHorizontal()) {
+          return;
+        }
+        if (dx < 0) {
+          step(1);
+        } else {
+          step(-1);
+        }
+      } else if (document.body.classList.contains('portrait')) {
+        if (dy < 0 && portraitPanel === 0) {
+          scrollToGallery();
+        } else if (dy > 0 && portraitPanel === 1) {
+          scrollToForm();
+        }
       }
     }
 
@@ -1436,6 +1517,11 @@
         lastGenMode = null;
       }
       updateSeedField();
+    }
+
+    function syncViewerFromMeta(meta) {
+      applyViewerState(meta);
+      syncFormFromMeta(meta);
       updateControls();
     }
 
@@ -1454,6 +1540,8 @@
       }
       if (meta.loraKnown) {
         setLoraFromMeta(meta.lora);
+      } else if (meta.steps != null) {
+        setLoraFromMeta(null);
       }
       clampSizeFields();
     }
@@ -1540,8 +1628,7 @@
       if (token !== viewerToken) {
         return;
       }
-      applyViewerState(meta);
-      syncFormFromMeta(meta);
+      syncViewerFromMeta(meta);
       updateViewerPrompt(meta);
     }
 
@@ -1556,7 +1643,7 @@
         return;
       }
       const item = images[index];
-      if (!deleteSkipConfirm) {
+      if (!isCoarsePointer() && !deleteSkipConfirm) {
         const ok = confirm(
           `Delete "${item.name}"?\n\nYou won't be asked again until you reload the page.`
         );
@@ -2019,8 +2106,7 @@
           if (item) {
             const meta = metaCache.get(item.path);
             if (meta) {
-              applyViewerState(meta);
-              syncFormFromMeta(meta);
+              syncViewerFromMeta(meta);
             }
           }
         }
@@ -2072,8 +2158,7 @@
           setStatus('Loaded from image metadata');
         }
 
-        applyViewerState(meta);
-        syncFormFromMeta(meta);
+        syncViewerFromMeta(meta);
       } catch (err) {
         setStatus(err.message, true);
       } finally {
@@ -2226,12 +2311,32 @@
     $('width').addEventListener('blur', () => onSizeBlur($('width')));
     $('height').addEventListener('blur', () => onSizeBlur($('height')));
     window.addEventListener('resize', updatePortraitLayout);
-    window.addEventListener('scroll', () => {
-      syncPortraitPanel();
-      updateScrollJumpBtn();
-    }, { passive: true });
-    document.addEventListener('touchstart', onPortraitTouchStart, { passive: true });
-    document.addEventListener('touchend', onPortraitTouchEnd, { passive: true });
+    document.addEventListener('touchstart', onMobileTouchStart, { passive: true });
+    document.addEventListener('touchend', onMobileTouchEnd, { passive: true });
+
+    function portraitBlocksTouchScroll(target) {
+      return target.closest('#prompt, .help-overlay');
+    }
+
+    document.addEventListener('touchmove', (e) => {
+      if (!document.body.classList.contains('portrait')) {
+        return;
+      }
+      if (portraitBlocksTouchScroll(e.target)) {
+        return;
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    window.addEventListener('wheel', (e) => {
+      if (!document.body.classList.contains('portrait')) {
+        return;
+      }
+      if (portraitBlocksTouchScroll(e.target)) {
+        return;
+      }
+      e.preventDefault();
+    }, { passive: false });
 
     const formPanel = $('form-panel');
     const helpBtn = $('help-btn');
