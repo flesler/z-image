@@ -257,6 +257,14 @@
 
     .field-width { grid-column: 1; }
     .field-height { grid-column: 2; }
+    .size-vram-warn {
+      grid-column: 1 / -1;
+      margin: 0;
+      font-size: 0.78em;
+      line-height: 1.35;
+    }
+    .size-vram-warn.warn-yellow { color: #e8c547; }
+    .size-vram-warn.warn-red { color: #f08080; }
     .field-count { grid-column: 1; }
     .field-seed { grid-column: 2; }
     .field-upload { grid-column: 1 / -1; }
@@ -681,6 +689,8 @@
           <input id="height" type="number" min="256" max="4096" step="1" value="1024">
         </label>
 
+        <p id="size-vram-warn" class="size-vram-warn hidden" aria-live="polite"></p>
+
         <label class="field field-count has-tip"
           data-tip="Images per run. Each uses the next seed; templates advance one variant per image">
           <span class="field-label">Count</span>
@@ -783,8 +793,10 @@
     const PREVIEW_STEPS = 3;
     const REFINED_STEPS = 8;
     const VAE_ALIGN = 16;
-        const MIN_DIM = 256
-        const MAX_DIM = 4096;
+    const VAE_PARK_PIXELS = 1024 * 1400;
+    const VAE_TILE_PIXELS = 1024 * 2048;
+    const MIN_DIM = 256;
+    const MAX_DIM = 4096;
     const MAX_DUP_ATTEMPTS = 50;
     const FORM_STORAGE_KEY = 'z-image-form';
     let loraCatalog = [];
@@ -793,45 +805,70 @@
     let touchStartY = 0;
     let deleteSkipConfirm = false;
 
-        function parseDim(value) {
-          const n = parseInt(String(value), 10)
-          if (!Number.isFinite(n)) {
-            return 1024
-          }
-          return Math.min(MAX_DIM, Math.max(MIN_DIM, n))
-        }
-
-        function isVaeAligned(value) {
-          return parseDim(value) % VAE_ALIGN === 0
-        }
-
-        function updateVaeWarnings() {
-          const wField = document.querySelector('.field-width')
-          const hField = document.querySelector('.field-height')
-          const wWarn = !isVaeAligned($('width').value)
-          const hWarn = !isVaeAligned($('height').value)
-          if (wField) {
-            wField.classList.toggle('warn-vae', wWarn)
-          }
-          if (hField) {
-            hField.classList.toggle('warn-vae', hWarn)
-          }
-          $('width-label').textContent = wWarn ? 'Width ⚠' : 'Width'
-          $('height-label').textContent = hWarn ? 'Height ⚠' : 'Height';
+    function parseDim(value) {
+      const n = parseInt(String(value), 10);
+      if (!Number.isFinite(n)) {
+        return 1024;
+      }
+      return Math.min(MAX_DIM, Math.max(MIN_DIM, n));
     }
 
-        function clampSizeField(field) {
-          field.value = parseDim(field.value);
+    function genPixels(width, height) {
+      const gw = Math.max(VAE_ALIGN, Math.ceil(width / VAE_ALIGN) * VAE_ALIGN);
+      const gh = Math.max(VAE_ALIGN, Math.ceil(height / VAE_ALIGN) * VAE_ALIGN);
+      return gw * gh;
     }
 
-        function clampSizeFields() {
-          clampSizeField($('width'))
-          clampSizeField($('height'))
-          updateVaeWarnings();
+    function isVaeAligned(value) {
+      return parseDim(value) % VAE_ALIGN === 0;
+    }
+
+    function updateSizeVramWarn() {
+      const el = $('size-vram-warn');
+      const pixels = genPixels(parseDim($('width').value), parseDim($('height').value));
+      el.classList.remove('warn-yellow', 'warn-red');
+      if (pixels >= VAE_TILE_PIXELS) {
+        el.textContent = 'Very high resolution — expect noticeably slower generation';
+        el.classList.add('warn-red');
+        el.classList.remove('hidden');
+      } else if (pixels >= VAE_PARK_PIXELS) {
+        el.textContent = 'High resolution — generation will be slower';
+        el.classList.add('warn-yellow');
+        el.classList.remove('hidden');
+      } else {
+        el.textContent = '';
+        el.classList.add('hidden');
+      }
+    }
+
+    function updateVaeWarnings() {
+      const wField = document.querySelector('.field-width');
+      const hField = document.querySelector('.field-height');
+      const wWarn = !isVaeAligned($('width').value);
+      const hWarn = !isVaeAligned($('height').value);
+      if (wField) {
+        wField.classList.toggle('warn-vae', wWarn);
+      }
+      if (hField) {
+        hField.classList.toggle('warn-vae', hWarn);
+      }
+      $('width-label').textContent = wWarn ? 'Width ⚠' : 'Width';
+      $('height-label').textContent = hWarn ? 'Height ⚠' : 'Height';
+      updateSizeVramWarn();
+    }
+
+    function clampSizeField(field) {
+      field.value = parseDim(field.value);
+    }
+
+    function clampSizeFields() {
+      clampSizeField($('width'));
+      clampSizeField($('height'));
+      updateVaeWarnings();
     }
 
     function onSizeBlur(field) {
-      clampSizeField(field)
+      clampSizeField(field);
       updateVaeWarnings();
       onFormContextChange();
       updatePortraitLayout();

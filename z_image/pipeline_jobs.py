@@ -75,15 +75,15 @@ def recover_pipe(pipe) -> None:
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     release_text_encoder(pipe)
-    try:
-        dev = pipe_device(pipe)
-        if dev.type == "cuda":
+    if torch.cuda.is_available():
+        dev = torch.device("cuda")
+        try:
             if next(pipe.transformer.parameters()).device.type != "cuda":
                 pipe.transformer.to(dev)
             if pipe.vae is not None and next(pipe.vae.parameters()).device.type != "cuda":
                 pipe.vae.to(dev)
-    except Exception:
-        pass
+        except Exception:
+            pass
 
 
 def _lora_key(loras: list[tuple[str, float]] | None) -> tuple[tuple[str, float], ...]:

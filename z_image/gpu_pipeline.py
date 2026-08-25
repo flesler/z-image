@@ -1,7 +1,7 @@
 """Fast GPU path for 8GB cards — no accelerate sequential offload."""
 from __future__ import annotations
 
-import os
+import functools
 import time
 from typing import Callable, Type
 
@@ -13,12 +13,66 @@ from diffusers.pipelines.z_image.pipeline_z_image_img2img import ZImageImg2ImgPi
 from .config import cpu_offload_enabled, gpu_monitor_enabled, resolve_steps, verbose_enabled
 from .log import log as tslog
 from .text_encoder import ensure_text_encoder, release_text_encoder
+from .vae_vram import (
+    decode_output_pixels,
+    should_park_transformer_for_decode,
+    should_tile_vae_for_decode,
+    VAE_PARK_PIXELS,
+    VAE_TILE_PIXELS,
+)
 
 _installed = False
 
 
-def vae_tiling_enabled() -> bool:
-    return os.environ.get("Z_IMAGE_VAE_TILING", "0").lower() in ("1", "true", "yes")
+def _park_transformer_for_vae(pipe: ZImagePipeline) -> bool:
+    if cpu_offload_enabled() or not torch.cuda.is_available():
+        return False
+    tfm = pipe.transformer
+    if next(tfm.parameters()).device.type != "cuda":
+        return False
+    tfm.to("cpu")
+    torch.cuda.empty_cache()
+    return True
+
+
+def _restore_transformer_after_vae(pipe: ZImagePipeline, parked: bool) -> None:
+    if not parked or cpu_offload_enabled() or not torch.cuda.is_available():
+        return
+    pipe.transformer.to("cuda")
+    torch.cuda.empty_cache()
+
+
+def _patch_vae_decode(pipe: ZImagePipeline) -> None:
+    vae = pipe.vae
+    if vae is None or getattr(vae, "_zimage_decode_patched", False):
+        return
+    original = vae.decode
+
+    @functools.wraps(original)
+    def decode_adaptive(*args, **kwargs):
+        latents = args[0] if args else kwargs.get("z")
+        pixels = decode_output_pixels(latents, pipe)
+        park = should_park_transformer_for_decode(pixels)
+        tile = should_tile_vae_for_decode(pixels)
+        if hasattr(vae, "enable_tiling") and hasattr(vae, "disable_tiling"):
+            if tile:
+                vae.enable_tiling()
+            else:
+                vae.disable_tiling()
+        if verbose_enabled() and (park or tile):
+            tslog(
+                f"VAE decode {pixels:,} px — "
+                f"park={'yes' if park else 'no'} tile={'yes' if tile else 'no'}",
+                tag="gpu",
+            )
+        parked = park and _park_transformer_for_vae(pipe)
+        try:
+            return original(*args, **kwargs)
+        finally:
+            _restore_transformer_after_vae(pipe, parked)
+
+    vae.decode = decode_adaptive
+    vae._zimage_decode_patched = True
 
 
 def _patch_pipeline_class(
@@ -118,15 +172,15 @@ def install(*, log: Callable[[str], None] | None = None) -> None:
         if hasattr(pipe, "disable_attention_slicing"):
             pipe.disable_attention_slicing()
         if torch.cuda.is_available():
-            if vae_tiling_enabled() and hasattr(pipe.vae, "enable_tiling"):
-                pipe.vae.enable_tiling()
             torch.cuda.empty_cache()
+        _patch_vae_decode(pipe)
         release_text_encoder(pipe)
         return pipe
 
     engine.load_pipeline = load_pipeline_fast_gpu
     _patch_pipeline()
     if verbose_enabled():
-        tiling = ", VAE tiling on" if vae_tiling_enabled() else ""
-        emit(f"fast path — no attention slicing, no progress bar, TE released after encode{tiling}")
+        park_m = VAE_PARK_PIXELS // 1_000_000
+        tile_m = VAE_TILE_PIXELS // 1_000_000
+        emit(f"fast path — TE released after encode; VAE park>{park_m}Mpx tile>{tile_m}Mpx")
     _installed = True
